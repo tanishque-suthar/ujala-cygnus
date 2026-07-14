@@ -4,3 +4,4 @@ __pycache__/
 .venv/
 opencode.json
 .playwright-mcp
+venv

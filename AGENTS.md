@@ -12,14 +12,6 @@ Chest X-ray screening system. Three services, each with a dedicated agent instru
 
 Request flow: **Frontend → Backend → Model Server**. The Frontend must never call the Model Server directly; the Model Server must never call anything upstream.
 
-## Per-service details
-
-- `agents/AGENT_1_MODEL_SERVER.md` — pure inference microservice. Image in → `{prediction, confidence, heatmap_base64}` out. No auth, no business logic, no priority. Loads `.pth` weights once at startup into a module-level/global. CORS allows only `localhost:8000`.
-- `agents/AGENT_2_BACKEND.md` — application layer. Validation + priority mapping + response formatting. Owns the `/screen` and `/health` endpoints. CORS allows only `localhost:3000`.
-- `agents/AGENT_3_FRONTEND.md` — upload + results UI. Display only; never computes priority/confidence beyond formatting. Single page, no router needed.
-
-When implementing, honor each file's **Explicit rules** ("Do not…") — these are hard boundaries, not suggestions.
-
 ## Key conventions & gotchas
 
 - **Priority mapping** (Backend-only) lives in `agents/AGENT_2_BACKEND.md:29`: `>=0.85`→high, `0.6–0.85`→moderate, `<0.6`→low, but only when `prediction == "pneumonia"`; `normal` is always `low`.
@@ -37,3 +29,4 @@ When implementing, honor each file's **Explicit rules** ("Do not…") — these 
 
 - **Separate git worktrees** Always make breaking changes in a new fresh git worktree.
 - **Do not write excessive comments**
+- Install everything in project's directory, try not installing anything in directories outside.
