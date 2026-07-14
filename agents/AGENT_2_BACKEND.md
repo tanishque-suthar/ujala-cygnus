@@ -68,5 +68,39 @@ field)
   Model Server.
 - Do not add a database or persistence layer unless explicitly asked later.
 - CORS: allow requests from Frontend only (`localhost:3000`).
-- Timeout on the Model Server call: 30 seconds, then treat as failure
-  (`502`).
+- Timeout on the Model Server call: 30 seconds, then treat as failure (`502`).
+
+## Database & Storage Decisions
+
+### SQLite & SQLAlchemy ORM
+- Database path configured absolutely from project root to `database/cygnus.db` using settings configured in `app/config.py`.
+- Managed via SQLAlchemy ORM models: `Patient`, `Document`, and `ScanResult`.
+- Migration history handled via **Alembic**; run migrations via async engine setup (`alembic/env.py`).
+
+### File Storage
+- Uploaded original files stored on disk: `database/uploads/images/{document_id}.{ext}`.
+- Model heatmaps stored on disk: `database/uploads/heatmaps/{scan_result_id}.png`.
+- DB records reference relative pathways, and endpoints stream them to the frontend.
+
+### Schema Relationships
+- `Patient` (1) ↔ (N) `Document` (has UUID, name, created_at timestamp).
+- `Document` (1) ↔ (0..1) `ScanResult` (contains prediction, confidence, computed priority, model used, and heatmap path).
+- Discriminator `document_type` (e.g. `"xray"`) dynamically tags documents without schema constraints.
+
+### Updated Endpoint Actions
+
+#### `POST /screen`
+- Accepts `file` (UploadFile), `patient_name` (Form parameter), and optional `patient_id` (Form parameter).
+- Automatically links to patient if `patient_id` exists, or instantiates a new `Patient` record.
+- Writes files to disk, maps DB relationships, saves `ScanResult`, and returns `ScreenResponse` (extended with `document_id`, `patient_id`, and `patient_name`).
+
+#### `GET /patients` & `GET /patients/stats`
+- Lists all patients with `record_count`.
+- Returns stats containing total counts of patients and documents.
+
+#### `GET /patients/{patient_id}`
+- Returns nested patient details + document list with their respective scan results.
+
+#### `GET /image/{document_id}` & `GET /heatmap/{scan_result_id}`
+- Files are read from storage and streamed via `FileResponse` with correct MIME types.
+

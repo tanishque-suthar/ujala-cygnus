@@ -19,6 +19,7 @@ export default function XRayScreening() {
   const [result, setResult] = useState(null)
   const [error, setError] = useState(null)
   const [dragActive, setDragActive] = useState(false)
+  const [patientName, setPatientName] = useState('')
   const inputRef = useRef(null)
 
   const selectFile = useCallback((f) => {
@@ -35,12 +36,14 @@ export default function XRayScreening() {
     if (dropped) selectFile(dropped)
   }, [selectFile])
 
+  const canAnalyze = file && patientName.trim().length > 0
+
   const handleAnalyze = async () => {
-    if (!file) return
+    if (!canAnalyze) return
     setState('loading')
     setError(null)
     try {
-      const data = await screenXray(file)
+      const data = await screenXray(file, patientName.trim())
       setResult(data)
       setState('results')
     } catch (err) {
@@ -60,6 +63,7 @@ export default function XRayScreening() {
     setPreview(null)
     setResult(null)
     setError(null)
+    setPatientName('')
   }
 
   const priority = result ? (PRIORITY_STYLES[result.priority] || PRIORITY_STYLES.low) : null
@@ -81,6 +85,19 @@ export default function XRayScreening() {
                   {error}
                 </div>
               )}
+
+              <div className="w-full">
+                <label className="block text-sm font-medium text-on-surface mb-xs">
+                  Patient Name <span className="text-error">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={patientName}
+                  onChange={(e) => setPatientName(e.target.value)}
+                  placeholder="e.g. Priya Mehta"
+                  className="w-full px-md py-sm border border-outline-variant rounded-lg bg-surface text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all"
+                />
+              </div>
 
               <input
                 ref={inputRef}
@@ -117,11 +134,19 @@ export default function XRayScreening() {
                     <button onClick={() => { setFile(null); setPreview(null) }} className="text-sm text-secondary hover:text-on-surface py-xs px-md rounded-lg border border-outline-variant">
                       Clear
                     </button>
-                    <button onClick={handleAnalyze} className="bg-primary text-on-primary py-sm px-xl rounded-lg text-sm font-medium hover:opacity-90 transition-opacity">
+                    <button
+                      onClick={handleAnalyze}
+                      disabled={!canAnalyze}
+                      className="bg-primary text-on-primary py-sm px-xl rounded-lg text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
                       Analyze
                     </button>
                   </div>
                 </div>
+              )}
+
+              {file && !patientName.trim() && (
+                <p className="text-xs text-secondary w-full">Enter a patient name to enable analysis.</p>
               )}
             </div>
           </div>
@@ -138,9 +163,9 @@ export default function XRayScreening() {
                 </div>
               </div>
               <div className="text-center w-full">
-                <p className="text-lg font-semibold text-on-surface mb-md">Analyzing chest X-ray...</p>
+                <p className="text-lg font-semibold text-on-surface mb-md">Analyzing chest X-ray…</p>
                 <div className="progress-bar-indeterminate rounded-full" />
-                <p className="text-xs text-secondary mt-md italic">Running pathology detection model...</p>
+                <p className="text-xs text-secondary mt-md italic">Running pathology detection model…</p>
               </div>
             </div>
           </div>
@@ -149,7 +174,10 @@ export default function XRayScreening() {
         {state === 'results' && result && (
           <div className="bg-surface-container-lowest w-full max-w-[960px] border border-outline-variant rounded-xl overflow-hidden mx-auto">
             <div className="px-xl py-lg border-b border-outline-variant flex justify-between items-center">
-              <h3 className="text-lg font-semibold text-on-surface">Screening Results</h3>
+              <div>
+                <h3 className="text-lg font-semibold text-on-surface">Screening Results</h3>
+                <p className="text-xs text-on-surface-variant mt-0.5">Patient: <span className="font-semibold">{result.patient_name}</span></p>
+              </div>
               <span className={`${priority.bg} ${priority.text} text-xs px-md py-xs rounded-full flex items-center gap-xs`}>
                 <span className="material-symbols-outlined text-[14px]" style={{ fontVariationSettings: "'FILL' 1" }}>{priority.icon}</span>
                 {priority.label}

@@ -26,14 +26,12 @@ export default function Header() {
         </button>
         <div className="flex items-center gap-3">
           <div className="text-right hidden lg:block">
-            <p className="text-sm font-semibold text-on-surface">Dr. Sarah Jenkins</p>
+            <p className="text-sm font-semibold text-on-surface">Dr. Priya Sharma</p>
             <p className="text-xs text-on-surface-variant">Radiology Dept.</p>
           </div>
-          <img
-            className="w-10 h-10 rounded-full border border-outline-variant object-cover"
-            src="https://lh3.googleusercontent.com/aida-public/AB6AXuDIPtnFJAipnhc1mWvGfkKVEg0_jMpxeEqW-mFQNPlfM5QZoo321hhTc4_7Y_ZdhF1gUJarPivyHtW7Ere0ntJwaxTd8pf2BBJ5v0cPixKcnnHz-cIec-HDZX3mAF1SbTMckNPaW0tjs6PIQe3K4yUE5hlNsbR7r61njZPXr54aXNMcKEl4JczSy7TP6BBIoJupaM4MPZ8HXBwkvX1z0miM3C9xukDB35rcji6zkH8-sUf0TkppcyJKzg"
-            alt="Dr. Sarah Jenkins"
-          />
+          <div className="w-10 h-10 rounded-full border border-outline-variant bg-primary-fixed flex items-center justify-center text-primary font-bold text-sm">
+            PS
+          </div>
         </div>
       </div>
     </header>

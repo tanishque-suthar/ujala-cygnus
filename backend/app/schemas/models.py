@@ -10,6 +10,9 @@ class ScreenResponse(BaseModel):
     model_used: str
     heatmap_base64: str
     timestamp: datetime
+    document_id: str
+    patient_id: str
+    patient_name: str
 
 
 class HealthResponse(BaseModel):

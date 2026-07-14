@@ -1,43 +1,130 @@
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import MainLayout from '../components/MainLayout'
+import { fetchPatients, fetchPatientDocuments, imageUrl } from '../api/client'
+
+const DOC_TYPE_LABEL = {
+  xray: 'Chest X-Ray',
+  brain_mri: 'Brain MRI',
+  ct: 'Abdominal CT',
+  text_report: 'Text Report',
+}
+
+const DOC_TYPE_ICON = {
+  xray: 'radiology',
+  brain_mri: 'psychology',
+  ct: 'biotech',
+  text_report: 'description',
+}
 
 export default function Records() {
   const navigate = useNavigate()
+  const [documents, setDocuments] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [filter, setFilter] = useState('all')
+
+  useEffect(() => {
+    fetchPatients()
+      .then(async (patients) => {
+        const allDocs = await Promise.all(
+          patients.map((p) =>
+            fetchPatientDocuments(p.id).then((docs) =>
+              docs.map((d) => ({ ...d, patient_name: p.name }))
+            )
+          )
+        )
+        const flat = allDocs
+          .flat()
+          .sort((a, b) => new Date(b.uploaded_at) - new Date(a.uploaded_at))
+        setDocuments(flat)
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
+
+  const filtered =
+    filter === 'all' ? documents : documents.filter((d) => d.document_type === filter)
 
   return (
     <MainLayout>
       <div className="flex justify-between mb-lg items-center">
-        <div className="flex gap-2">
-          <button className="bg-primary text-on-primary px-4 py-2 rounded-full text-xs">All Records</button>
-          <button className="bg-white border border-outline-variant px-4 py-2 rounded-full text-xs">Radiology</button>
+        <div className="flex gap-2 flex-wrap">
+          {['all', 'xray', 'brain_mri', 'ct', 'text_report'].map((t) => (
+            <button
+              key={t}
+              onClick={() => setFilter(t)}
+              className={`px-4 py-2 rounded-full text-xs transition-colors ${
+                filter === t
+                  ? 'bg-primary text-on-primary'
+                  : 'bg-white border border-outline-variant hover:bg-surface-container'
+              }`}
+            >
+              {t === 'all' ? 'All Records' : DOC_TYPE_LABEL[t] ?? t}
+            </button>
+          ))}
         </div>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-lg">
-        <div
-          onClick={() => navigate('/brain-mri')}
-          className="bg-white border border-outline-variant rounded-xl p-md cursor-pointer hover:border-primary transition-all group"
-        >
-          <div className="h-40 rounded-lg bg-surface-container-low mb-md overflow-hidden">
-            <img
-              className="w-full h-full object-cover group-hover:scale-110 transition-transform"
-              src="https://lh3.googleusercontent.com/aida-public/AB6AXuASshIZuLiTzifhrlGa_yUyGotGHG3XZXF0AsT0dxMJdL5sv7ZBAdShepTPq5cmCEFGbFvz7PBbv7XAOCj9g4mHHZLoCqziz_gYgABilJTa14At_yIkpfB0mBrvmYdvDAmdhIeyniuABPfBge3CRhaiR_P14WSKV8cMOpeRuH2Lvq8c0ZZfG7Acos4XIH4F9bU8f5kCUqUl2Wr80Wn7abDS8JTCADYG_6idu01YUoD9bEXuTMGpE04t8g"
-              alt="Brain MRI scan"
-            />
-          </div>
-          <h4 className="font-semibold truncate">Brain_MRI_Oct24.dcm</h4>
-          <p className="text-xs text-on-surface-variant mt-1">Oct 24, 2023</p>
+
+      {loading ? (
+        <div className="text-sm text-on-surface-variant p-lg">Loading…</div>
+      ) : filtered.length === 0 ? (
+        <div className="text-sm text-on-surface-variant p-lg">
+          {filter === 'all'
+            ? 'No records yet. Upload a scan to get started.'
+            : `No ${DOC_TYPE_LABEL[filter] ?? filter} records found.`}
         </div>
-        <div
-          onClick={() => navigate('/lab-results')}
-          className="bg-white border border-outline-variant rounded-xl p-md cursor-pointer hover:border-primary transition-all group"
-        >
-          <div className="h-40 rounded-lg bg-surface-container-low mb-md flex items-center justify-center">
-            <span className="material-symbols-outlined text-outline text-6xl">description</span>
-          </div>
-          <h4 className="font-semibold truncate">Blood_Work_Final.pdf</h4>
-          <p className="text-xs text-on-surface-variant mt-1">Oct 21, 2023</p>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-lg">
+          {filtered.map((doc) => (
+            <div
+              key={doc.id}
+              onClick={() => navigate(`/patients/${doc.patient_id}`)}
+              className="bg-white border border-outline-variant rounded-xl p-md cursor-pointer hover:border-primary transition-all group"
+            >
+              <div className="h-40 rounded-lg bg-black mb-md overflow-hidden">
+                <img
+                  src={imageUrl(doc.id)}
+                  alt={doc.filename}
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none'
+                    e.currentTarget.parentElement.classList.add('flex', 'items-center', 'justify-center', 'bg-surface-container-low')
+                    e.currentTarget.parentElement.innerHTML =
+                      `<span class="material-symbols-outlined text-outline text-6xl">${DOC_TYPE_ICON[doc.document_type] ?? 'image'}</span>`
+                  }}
+                />
+              </div>
+              <h4 className="font-semibold truncate" title={doc.filename}>{doc.filename}</h4>
+              <p className="text-xs text-on-surface-variant mt-1">
+                {DOC_TYPE_LABEL[doc.document_type] ?? doc.document_type}
+              </p>
+              <p className="text-xs text-on-surface-variant">
+                {new Date(doc.uploaded_at).toLocaleDateString('en-IN', {
+                  month: 'short',
+                  day: 'numeric',
+                  year: 'numeric',
+                })}
+              </p>
+              {doc.patient_name && (
+                <p className="text-xs text-primary mt-1 truncate">{doc.patient_name}</p>
+              )}
+              {doc.scan_result && (
+                <span
+                  className={`mt-2 inline-block px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                    doc.scan_result.priority === 'high'
+                      ? 'bg-error-container text-error'
+                      : doc.scan_result.priority === 'moderate'
+                      ? 'bg-[#fef3c7] text-[#92400e]'
+                      : 'bg-tertiary-fixed-dim text-on-tertiary-fixed-variant'
+                  }`}
+                >
+                  {doc.scan_result.priority}
+                </span>
+              )}
+            </div>
+          ))}
         </div>
-      </div>
+      )}
     </MainLayout>
   )
 }

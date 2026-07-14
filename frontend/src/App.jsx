@@ -8,6 +8,7 @@ import LabResults from './pages/LabResults'
 import PatientHistory from './pages/PatientHistory'
 import Records from './pages/Records'
 import Settings from './pages/Settings'
+import PatientProfile from './pages/PatientProfile'
 
 export default function App() {
   return (
@@ -22,6 +23,7 @@ export default function App() {
         <Route path="/history" element={<PatientHistory />} />
         <Route path="/records" element={<Records />} />
         <Route path="/settings" element={<Settings />} />
+        <Route path="/patients/:patientId" element={<PatientProfile />} />
       </Routes>
     </BrowserRouter>
   )
