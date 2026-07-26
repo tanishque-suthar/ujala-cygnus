@@ -27,7 +27,7 @@ app.add_middleware(
 
 @app.get("/health")
 async def health():
-    from stub_model_server.model import get_model
+    from model import get_model
 
     try:
         get_model()
