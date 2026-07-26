@@ -13,7 +13,9 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 _model = None
 
 def load_model():
-    model = xrv.models.DenseNet(weights="densenet121-res224-all")
+    model = xrv.models.DenseNet(weights="densenet121-res224-all", apply_sigmoid=False)
+    model.saved_op_threshs = model.op_threshs
+    model.op_threshs = None
     model.eval()
     model.to(DEVICE)
     return model
@@ -31,19 +33,19 @@ def preprocess_image(image: Image.Image):
     img = np.array(image.convert("L"), dtype=np.float32)
     img = xrv.datasets.normalize(img, 255)
     
-    # Convert to tensor (1, H, W)
-    img_tensor = torch.from_numpy(img).unsqueeze(0)
-    _, h, w = img_tensor.shape
-    min_dim = min(h, w)
+    # Add channel dimension -> shape (1, H, W)
+    img = img[np.newaxis, ...]
     
-    # Use standard torchvision transforms for guaranteed center crop (no padding)
     transform = torchvision.transforms.Compose([
-        torchvision.transforms.CenterCrop(min_dim),
-        torchvision.transforms.Resize((224, 224), antialias=True),
+        xrv.datasets.XRayCenterCrop(),
+        xrv.datasets.XRayResizer(224),
     ])
     
-    pixel_values = transform(img_tensor)
-    return pixel_values.unsqueeze(0).to(DEVICE)
+    img = transform(img)
+    
+    # Convert to tensor, unsqueeze batch dim -> final shape (1, 1, 224, 224)
+    pixel_values = torch.from_numpy(img).unsqueeze(0).to(DEVICE)
+    return pixel_values
 
 def _generate_gradcam(model, pixel_values, target_idx, original_image):
     input_tensor = pixel_values.clone().requires_grad_(True)
@@ -91,22 +93,21 @@ def predict(image: Image.Image) -> dict:
     with torch.no_grad():
         logits = model(pixel_values)
 
-    T = 0.9
-    probs = torch.sigmoid(logits[0] / T).cpu().numpy()
+    probs = torch.sigmoid(logits[0]).cpu().numpy()
     pathology_scores = {
         name: round(float(probs[i]), 4)
         for i, name in enumerate(model.pathologies)
     }
 
     op_threshs = {
-        name: float(model.op_threshs[i])
+        name: float(model.saved_op_threshs[i])
         for i, name in enumerate(model.pathologies)
     }
 
     candidates = [
         (i, name, float(probs[i]))
         for i, name in enumerate(model.pathologies)
-        if name != "Lung Opacity" and float(probs[i]) >= float(model.op_threshs[i])
+        if name != "Lung Opacity" and float(probs[i]) >= float(model.saved_op_threshs[i])
     ]
 
     if candidates:

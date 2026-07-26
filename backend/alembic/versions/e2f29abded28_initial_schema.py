@@ -43,6 +43,8 @@ def upgrade() -> None:
     sa.Column('confidence', sa.Float(), nullable=False),
     sa.Column('priority', sa.String(), nullable=False),
     sa.Column('model_used', sa.String(), nullable=False),
+    sa.Column('pathology_scores', sa.JSON(), nullable=True),
+    sa.Column('op_threshs', sa.JSON(), nullable=True),
     sa.Column('heatmap_path', sa.String(), nullable=True),
     sa.Column('analyzed_at', sa.DateTime(timezone=True), nullable=False),
     sa.ForeignKeyConstraint(['document_id'], ['documents.id'], ),

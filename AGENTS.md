@@ -30,3 +30,4 @@ Request flow: **Frontend → Backend → Model Server**. The Frontend must never
 - **Separate git worktrees** Always make breaking changes in a new fresh git worktree.
 - **Do not write excessive comments**
 - Install everything in project's directory, try not installing anything in directories outside.
+- **Update Docs** After any major change, update the markdown files in /agents directory
