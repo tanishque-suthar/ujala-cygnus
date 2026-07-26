@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import MainLayout from '../components/MainLayout'
+import PathologyScores from '../components/PathologyScores'
 import { fetchPatient, imageUrl, heatmapUrl } from '../api/client'
 
 const DOC_TYPE_LABEL = {
@@ -64,35 +65,14 @@ function ImageModal({ doc, onClose }) {
           )}
         </div>
         {hasScan && (
-          <div className="px-xl pb-xl">
-            <div className="bg-surface-container-low rounded-xl p-md flex flex-wrap gap-lg">
-              <div>
-                <p className="text-xs text-on-surface-variant">Prediction</p>
-                <p className="font-semibold text-sm capitalize">{doc.scan_result.prediction}</p>
-              </div>
-              <div>
-                <p className="text-xs text-on-surface-variant">Confidence</p>
-                <p className="font-semibold text-sm">{(doc.scan_result.confidence * 100).toFixed(1)}%</p>
-              </div>
-              <div>
-                <p className="text-xs text-on-surface-variant">Model</p>
-                <p className="font-semibold text-sm">{doc.scan_result.model_used}</p>
-              </div>
-              <div>
-                <p className="text-xs text-on-surface-variant">Priority</p>
-                <span
-                  className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                    doc.scan_result.priority === 'high'
-                      ? 'bg-error-container text-error'
-                      : doc.scan_result.priority === 'moderate'
-                      ? 'bg-[#fef3c7] text-[#92400e]'
-                      : 'bg-tertiary-fixed-dim text-on-tertiary-fixed-variant'
-                  }`}
-                >
-                  {doc.scan_result.priority}
-                </span>
-              </div>
-            </div>
+          <div className="px-xl pb-xl space-y-md">
+            <p className="text-xs text-on-surface-variant">
+              Model: <span className="font-semibold text-on-surface">{doc.scan_result.model_used}</span>
+            </p>
+            <PathologyScores
+              scores={doc.scan_result.pathology_scores}
+              opThreshs={doc.scan_result.op_threshs}
+            />
           </div>
         )}
       </div>
@@ -206,20 +186,9 @@ export default function PatientProfile() {
                   })}
                 </p>
                 {doc.scan_result && (
-                  <div className="mt-2 flex items-center gap-2">
-                    <span
-                      className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                        doc.scan_result.priority === 'high'
-                          ? 'bg-error-container text-error'
-                          : doc.scan_result.priority === 'moderate'
-                          ? 'bg-[#fef3c7] text-[#92400e]'
-                          : 'bg-tertiary-fixed-dim text-on-tertiary-fixed-variant'
-                      }`}
-                    >
-                      {doc.scan_result.priority}
-                    </span>
+                  <div className="mt-2">
                     <span className="text-xs text-on-surface-variant">
-                      {(doc.scan_result.confidence * 100).toFixed(0)}%
+                      Model: {doc.scan_result.model_used}
                     </span>
                   </div>
                 )}

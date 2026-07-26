@@ -97,6 +97,8 @@ async def screen(
                 prediction=prediction,
                 confidence=confidence,
                 model_used=settings.active_model_name,
+                pathology_scores=pathology_scores,
+                op_threshs=op_threshs,
                 heatmap_path=str(heatmap_abs),
             )
             session.add(scan_result_row)

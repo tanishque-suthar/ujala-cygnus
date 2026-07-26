@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import MainLayout from '../components/MainLayout'
+import PathologyScores from '../components/PathologyScores'
 import { fetchPatients, fetchPatientDocuments, imageUrl } from '../api/client'
 
 const DOC_TYPE_LABEL = {
@@ -109,17 +110,12 @@ export default function Records() {
                 <p className="text-xs text-primary mt-1 truncate">{doc.patient_name}</p>
               )}
               {doc.scan_result && (
-                <span
-                  className={`mt-2 inline-block px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                    doc.scan_result.priority === 'high'
-                      ? 'bg-error-container text-error'
-                      : doc.scan_result.priority === 'moderate'
-                      ? 'bg-[#fef3c7] text-[#92400e]'
-                      : 'bg-tertiary-fixed-dim text-on-tertiary-fixed-variant'
-                  }`}
-                >
-                  {doc.scan_result.priority}
-                </span>
+                <div className="mt-2">
+                  <PathologyScores
+                    scores={doc.scan_result.pathology_scores}
+                    opThreshs={doc.scan_result.op_threshs}
+                  />
+                </div>
               )}
             </div>
           ))}
