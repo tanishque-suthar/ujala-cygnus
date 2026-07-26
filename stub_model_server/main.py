@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from PIL import Image
 
-from model import init_model, predict
+from inference import init_model, predict
 
 
 @asynccontextmanager
@@ -27,7 +27,7 @@ app.add_middleware(
 
 @app.get("/health")
 async def health():
-    from model import get_model
+    from inference import get_model
 
     try:
         get_model()
