@@ -90,7 +90,7 @@ def predict(image: Image.Image) -> dict:
 
     with torch.no_grad():
         logits = model(pixel_values)
-    
+
     T = 0.9
     probs = torch.sigmoid(logits[0] / T).cpu().numpy()
     pathology_scores = {
@@ -98,18 +98,34 @@ def predict(image: Image.Image) -> dict:
         for i, name in enumerate(model.pathologies)
     }
 
-    pneumonia_idx = model.pathologies.index("Pneumonia")
-    pneumonia_prob = float(probs[pneumonia_idx])
-    threshold = float(model.op_threshs[pneumonia_idx])
+    op_threshs = {
+        name: float(model.op_threshs[i])
+        for i, name in enumerate(model.pathologies)
+    }
 
-    prediction = "pneumonia" if pneumonia_prob >= threshold else "normal"
-    confidence = pneumonia_prob if prediction == "pneumonia" else (1.0 - pneumonia_prob)
+    candidates = [
+        (i, name, float(probs[i]))
+        for i, name in enumerate(model.pathologies)
+        if name != "Lung Opacity" and float(probs[i]) >= float(model.op_threshs[i])
+    ]
 
-    heatmap_base64 = _generate_gradcam(model, pixel_values, pneumonia_idx, image)
+    if candidates:
+        target_idx, prediction, confidence = max(candidates, key=lambda x: x[2])
+    else:
+        prediction = "normal"
+        confidence = 0.0
+        overall_max = max(
+            ((i, float(probs[i])) for i in range(len(model.pathologies))),
+            key=lambda x: x[1],
+        )
+        target_idx = overall_max[0]
+
+    heatmap_base64 = _generate_gradcam(model, pixel_values, target_idx, image)
 
     return {
         "prediction": prediction,
         "confidence": round(confidence, 4),
         "heatmap_base64": heatmap_base64,
         "pathology_scores": pathology_scores,
+        "op_threshs": op_threshs,
     }

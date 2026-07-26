@@ -16,7 +16,7 @@ class ScanResult(Base):
     )
     prediction: Mapped[str] = mapped_column(String, nullable=False)
     confidence: Mapped[float] = mapped_column(Float, nullable=False)
-    priority: Mapped[str] = mapped_column(String, nullable=False)
+    priority: Mapped[str] = mapped_column(String, nullable=False, default="low")
     model_used: Mapped[str] = mapped_column(String, nullable=False)
     heatmap_path: Mapped[str | None] = mapped_column(String, nullable=True)
     analyzed_at: Mapped[datetime] = mapped_column(

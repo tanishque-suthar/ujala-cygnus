@@ -26,21 +26,26 @@ Weights are auto-downloaded by torchxrayvision to `~/.torchxrayvision/` on first
 ### Inference Flow
 1. Forward pass through DenseNet → raw logits of shape `(1, 18)`
 2. Apply `torch.sigmoid` to get per-pathology probabilities
-3. Extract Pneumonia probability at `model.pathologies.index("Pneumonia")`
-4. Compare against `model.op_threshs[pneumonia_idx]` (pre-calibrated operating threshold shipped with the model weights) to decide `"pneumonia"` vs `"normal"`
-5. Confidence = `pneumonia_prob` if pneumonia, else `1.0 - pneumonia_prob`
-6. All 18 sigmoid scores are returned as `pathology_scores`
+3. Build `pathology_scores` dict from all 18 sigmoid values
+4. Build `op_threshs` dict from `model.op_threshs` (pre-calibrated operating thresholds shipped with the model weights)
+5. Find all pathologies (excluding `"Lung Opacity"`) where `probability >= threshold`
+6. If any qualify → pick the highest-scoring one as the prediction; its score becomes `confidence`
+7. If none qualify → `prediction = "normal"`, `confidence = 0.0`
+8. All 18 sigmoid scores and all 18 thresholds are returned in the response
 
 ### Explainability (Grad-CAM)
 Uses `captum.attr.LayerGradCam` targeting `model.features[-1]` (the final DenseBlock).
 
 1. Clone input tensor with `requires_grad_(True)`
-2. Compute Grad-CAM attribution for the Pneumonia class index
-3. ReLU + normalize the activation map to [0, 1]
-4. Resize to original image dimensions (bicubic interpolation)
-5. Apply `inferno` colormap from matplotlib
-6. Blend with original RGB image using intensity-scaled alpha (max 75% — hotter regions show more heatmap, cooler regions show more original)
-7. Encode overlay as PNG → base64 string (no `data:` URI prefix)
+2. Determine the **target class index**:
+   - If a pathology exceeded its threshold → target is that winning pathology's index
+   - If none exceeded (prediction is `"normal"`) → target is the overall highest-scoring pathology (any pathology, including `"Lung Opacity"`), so a meaningful heatmap is always generated
+3. Compute Grad-CAM attribution for the target index
+4. ReLU + normalize the activation map to [0, 1]
+5. Resize to original image dimensions (bicubic interpolation)
+6. Apply `inferno` colormap from matplotlib
+7. Blend with original RGB image using intensity-scaled alpha (max 75% — hotter regions show more heatmap, cooler regions show more original)
+8. Encode overlay as PNG → base64 string (no `data:` URI prefix)
 
 ## File Structure
 
@@ -64,17 +69,37 @@ Returns `{"status": "ok", "model_loaded": true}` or `503` if model failed to loa
 **Response (200):**
 ```json
 {
-  "prediction": "pneumonia",
-  "confidence": 0.8734,
+  "prediction": "Consolidation",
+  "confidence": 0.8721,
   "heatmap_base64": "iVBORw0KGgo...",
   "pathology_scores": {
     "Atelectasis": 0.1234,
-    "Pneumonia": 0.8734,
-    "Effusion": 0.0512,
+    "Consolidation": 0.8721,
+    "Pneumonia": 0.0542,
+    "Lung Opacity": 0.3123,
+    ...
+  },
+  "op_threshs": {
+    "Atelectasis": 0.0742,
+    "Consolidation": 0.0383,
+    "Pneumonia": 0.0568,
+    "Lung Opacity": 0.2020,
     ...
   }
 }
 ```
+
+When no pathology exceeds its threshold:
+```json
+{
+  "prediction": "normal",
+  "confidence": 0.0,
+  "heatmap_base64": "iVBORw0KGgo...",
+  "pathology_scores": { ... },
+  "op_threshs": { ... }
+}
+```
+The `prediction` field is `"normal"` and `confidence` is `0.0`. A heatmap is still generated against the overall highest-scoring pathology.
 
 **Errors:**
 - `400` — invalid file type or unreadable image

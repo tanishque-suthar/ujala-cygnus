@@ -2,75 +2,104 @@ import { useState, useRef, useCallback } from 'react'
 import MainLayout from '../components/MainLayout'
 import { screenXray } from '../api/client'
 
-const PRIORITY_STYLES = {
-  high: { bg: 'bg-error', text: 'text-on-error', label: 'HIGH PRIORITY', icon: 'warning', heading: 'text-error' },
-  moderate: { bg: 'bg-[#f59e0b]', text: 'text-white', label: 'MODERATE PRIORITY', icon: 'info', heading: 'text-[#f59e0b]' },
-  low: { bg: 'bg-tertiary', text: 'text-on-tertiary', label: 'LOW PRIORITY', icon: 'check_circle', heading: 'text-tertiary' },
+const LUNG_OPACITY_SUPPRESS_ON = new Set(['Consolidation', 'Infiltration', 'Effusion'])
+
+function getFlaggedFindings(scores, opThreshs) {
+  if (!scores || !opThreshs) return []
+
+  let flagged = Object.entries(scores).filter(
+    ([name, score]) => opThreshs[name] != null && score >= opThreshs[name]
+  )
+
+  const loEntry = flagged.find(([name]) => name === 'Lung Opacity')
+  if (loEntry) {
+    const hasMoreSpecific = flagged.some(
+      ([name]) => LUNG_OPACITY_SUPPRESS_ON.has(name)
+    )
+    if (hasMoreSpecific) {
+      flagged = flagged.filter(([name]) => name !== 'Lung Opacity')
+    } else {
+      flagged = flagged.map(([name, score]) =>
+        name === 'Lung Opacity' ? ['General Opacity (nonspecific)', score] : [name, score]
+      )
+    }
+  }
+
+  return flagged.sort(([, a], [, b]) => b - a)
 }
 
-function getTopPathologies(scores, n = 2) {
-  if (!scores) return []
-  return Object.entries(scores)
-    .sort(([, a], [, b]) => b - a)
-    .slice(0, n)
+function FlaggedFindings({ findings }) {
+  if (findings.length === 0) {
+    return (
+      <div className="flex items-center gap-sm text-on-surface-variant">
+        <span className="material-symbols-outlined text-[18px]">check_circle</span>
+        <span className="text-sm font-medium">No findings above threshold</span>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-sm">
+      <span className="text-xs text-secondary uppercase tracking-widest">Flagged Findings</span>
+      <div className="flex flex-wrap gap-sm">
+        {findings.map(([name]) => (
+          <span
+            key={name}
+            className="text-xs font-medium px-sm py-0.5 rounded-full bg-error-container text-on-error-container border border-error/30"
+          >
+            {name}
+          </span>
+        ))}
+      </div>
+    </div>
+  )
 }
 
 function PathologyBar({ name, score }) {
   const pct = (score * 100).toFixed(1)
-  const isHigh = score >= 0.5
   return (
     <div className="flex items-center gap-md">
       <span className="text-xs text-on-surface-variant w-[180px] shrink-0 truncate" title={name}>{name}</span>
       <div className="flex-1 h-[6px] bg-surface-container-high rounded-full overflow-hidden">
         <div
-          className={`h-full rounded-full transition-all duration-500 ${isHigh ? 'bg-error' : 'bg-primary'}`}
+          className="h-full rounded-full bg-secondary transition-all duration-500"
           style={{ width: `${Math.max(score * 100, 1)}%` }}
         />
       </div>
-      <span className={`text-xs font-medium w-[48px] text-right ${isHigh ? 'text-error' : 'text-on-surface-variant'}`}>{pct}%</span>
+      <span className="text-xs font-medium text-on-surface-variant w-[48px] text-right">{pct}%</span>
     </div>
   )
 }
 
-function PathologyScores({ scores }) {
+function PathologyScores({ scores, opThreshs }) {
   const [expanded, setExpanded] = useState(false)
   if (!scores) return null
 
-  const top = getTopPathologies(scores, 2)
-  const all = Object.entries(scores).sort(([, a], [, b]) => b - a)
+  const flagged = getFlaggedFindings(scores, opThreshs)
+  const allSorted = Object.entries(scores).sort(([, a], [, b]) => b - a)
 
   return (
-    <div className="mt-lg">
-      <div className="flex items-center gap-sm flex-wrap">
-        <span className="text-xs text-secondary uppercase tracking-widest">Top Findings</span>
-        {top.map(([name, score]) => (
-          <span key={name} className={`text-xs px-sm py-0.5 rounded-full border ${score >= 0.5 ? 'border-error/30 bg-error-container text-on-error-container' : 'border-outline-variant bg-surface-container-low text-on-surface-variant'}`}>
-            {name} {(score * 100).toFixed(1)}%
-          </span>
-        ))}
-      </div>
+    <div className="mt-lg space-y-md">
+      <FlaggedFindings findings={flagged} />
 
       <button
         onClick={() => setExpanded(!expanded)}
-        className="mt-sm text-xs text-primary hover:text-primary-container flex items-center gap-xs transition-colors"
+        className="text-xs text-primary hover:text-primary-container flex items-center gap-xs transition-colors"
       >
         <span className="material-symbols-outlined text-[16px]" style={{ transform: expanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>expand_more</span>
-        {expanded ? 'Hide' : 'View all'} pathology scores
+        {expanded ? 'Hide' : 'View'} detailed pathology scores
       </button>
 
       {expanded && (
-        <div className="mt-sm space-y-xs p-md bg-surface-container-low rounded-lg border border-outline-variant animate-[fadeIn_0.2s_ease-out]">
-          {all.map(([name, score]) => (
+        <div className="space-y-xs p-md bg-surface-container-low rounded-lg border border-outline-variant animate-[fadeIn_0.2s_ease-out]">
+          <p className="text-[11px] text-on-surface-variant italic mb-sm">These are raw model scores, not calibrated probabilities.</p>
+          {allSorted.map(([name, score]) => (
             <PathologyBar key={name} name={name} score={score} />
           ))}
         </div>
       )}
     </div>
   )
-}
-
-function formatPrediction(prediction) {
-  return prediction === 'pneumonia' ? 'Pneumonia Detected' : 'Normal — No Findings'
 }
 
 export default function XRayScreening() {
@@ -126,8 +155,6 @@ export default function XRayScreening() {
     setError(null)
     setPatientName('')
   }
-
-  const priority = result ? (PRIORITY_STYLES[result.priority] || PRIORITY_STYLES.low) : null
 
   return (
     <MainLayout>
@@ -234,15 +261,9 @@ export default function XRayScreening() {
 
         {state === 'results' && result && (
           <div className="bg-surface-container-lowest w-full max-w-[960px] border border-outline-variant rounded-xl overflow-hidden mx-auto">
-            <div className="px-xl py-lg border-b border-outline-variant flex justify-between items-center">
-              <div>
-                <h3 className="text-lg font-semibold text-on-surface">Screening Results</h3>
-                <p className="text-xs text-on-surface-variant mt-0.5">Patient: <span className="font-semibold">{result.patient_name}</span></p>
-              </div>
-              <span className={`${priority.bg} ${priority.text} text-xs px-md py-xs rounded-full flex items-center gap-xs`}>
-                <span className="material-symbols-outlined text-[14px]" style={{ fontVariationSettings: "'FILL' 1" }}>{priority.icon}</span>
-                {priority.label}
-              </span>
+            <div className="px-xl py-lg border-b border-outline-variant">
+              <h3 className="text-lg font-semibold text-on-surface">Screening Results</h3>
+              <p className="text-xs text-on-surface-variant mt-0.5">Patient: <span className="font-semibold">{result.patient_name}</span></p>
             </div>
             <div className="p-xl grid grid-cols-1 md:grid-cols-2 gap-xl">
               <div className="space-y-sm">
@@ -261,13 +282,10 @@ export default function XRayScreening() {
             <div className="px-xl py-xl bg-surface-container-low border-t border-outline-variant">
               <div className="flex flex-col md:flex-row md:items-start justify-between gap-xl">
                 <div className="space-y-xs flex-1">
-                  <h4 className={`text-lg font-semibold ${priority.heading}`}>{formatPrediction(result.prediction)}</h4>
                   <p className="text-sm text-on-surface-variant">
-                    Confidence: <span className="font-semibold text-on-surface">{(result.confidence * 100).toFixed(1)}%</span>
-                    <span className="mx-sm text-outline">·</span>
                     Model: <span className="font-semibold text-on-surface">{result.model_used}</span>
                   </p>
-                  <PathologyScores scores={result.pathology_scores} />
+                  <PathologyScores scores={result.pathology_scores} opThreshs={result.op_threshs} />
                 </div>
                 <button onClick={reset} className="bg-primary text-on-primary py-sm px-xl rounded-lg hover:opacity-90 transition-opacity shrink-0">
                   Analyze Another

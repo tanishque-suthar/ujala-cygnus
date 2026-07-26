@@ -20,15 +20,6 @@ ALLOWED_MIMETYPES = {"image/jpeg", "image/png"}
 MAX_FILE_SIZE = 10 * 1024 * 1024
 
 
-def _map_priority(prediction: str, confidence: float) -> str:
-    if prediction == "pneumonia":
-        if confidence >= 0.85:
-            return "high"
-        if confidence >= 0.6:
-            return "moderate"
-    return "low"
-
-
 def _ext(content_type: str) -> str:
     return ".jpg" if content_type == "image/jpeg" else ".png"
 
@@ -67,9 +58,9 @@ async def screen(
 
     prediction = result["prediction"]
     confidence = result["confidence"]
-    priority = _map_priority(prediction, confidence)
     heatmap_b64: str = result["heatmap_base64"]
     pathology_scores: dict = result.get("pathology_scores")
+    op_threshs: dict = result.get("op_threshs")
 
     doc_id = str(uuid.uuid4())
     scan_id = str(uuid.uuid4())
@@ -105,7 +96,6 @@ async def screen(
                 document_id=doc_id,
                 prediction=prediction,
                 confidence=confidence,
-                priority=priority,
                 model_used=settings.active_model_name,
                 heatmap_path=str(heatmap_abs),
             )
@@ -114,10 +104,10 @@ async def screen(
     return ScreenResponse(
         prediction=prediction,
         confidence=confidence,
-        priority=priority,
         model_used=settings.active_model_name,
         heatmap_base64=heatmap_b64,
         pathology_scores=pathology_scores,
+        op_threshs=op_threshs,
         timestamp=datetime.now(timezone.utc),
         document_id=doc_id,
         patient_id=patient.id,
