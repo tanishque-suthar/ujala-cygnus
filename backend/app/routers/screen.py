@@ -69,6 +69,7 @@ async def screen(
     confidence = result["confidence"]
     priority = _map_priority(prediction, confidence)
     heatmap_b64: str = result["heatmap_base64"]
+    pathology_scores: dict = result.get("pathology_scores")
 
     doc_id = str(uuid.uuid4())
     scan_id = str(uuid.uuid4())
@@ -116,6 +117,7 @@ async def screen(
         priority=priority,
         model_used=settings.active_model_name,
         heatmap_base64=heatmap_b64,
+        pathology_scores=pathology_scores,
         timestamp=datetime.now(timezone.utc),
         document_id=doc_id,
         patient_id=patient.id,

@@ -9,6 +9,7 @@ class ScreenResponse(BaseModel):
     priority: str
     model_used: str
     heatmap_base64: str
+    pathology_scores: dict[str, float] | None = None
     timestamp: datetime
     document_id: str
     patient_id: str

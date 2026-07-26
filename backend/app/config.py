@@ -8,7 +8,7 @@ _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
 class Settings(BaseSettings):
     model_server_url: str = "http://localhost:8001"
-    active_model_name: str = "biomedclip"
+    active_model_name: str = "densenet121"
     db_path: str = str(_PROJECT_ROOT / "database" / "cygnus.db")
     uploads_dir: str = str(_PROJECT_ROOT / "database" / "uploads")
 
