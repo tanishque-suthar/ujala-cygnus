@@ -8,6 +8,67 @@ const PRIORITY_STYLES = {
   low: { bg: 'bg-tertiary', text: 'text-on-tertiary', label: 'LOW PRIORITY', icon: 'check_circle', heading: 'text-tertiary' },
 }
 
+function getTopPathologies(scores, n = 2) {
+  if (!scores) return []
+  return Object.entries(scores)
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, n)
+}
+
+function PathologyBar({ name, score }) {
+  const pct = (score * 100).toFixed(1)
+  const isHigh = score >= 0.5
+  return (
+    <div className="flex items-center gap-md">
+      <span className="text-xs text-on-surface-variant w-[180px] shrink-0 truncate" title={name}>{name}</span>
+      <div className="flex-1 h-[6px] bg-surface-container-high rounded-full overflow-hidden">
+        <div
+          className={`h-full rounded-full transition-all duration-500 ${isHigh ? 'bg-error' : 'bg-primary'}`}
+          style={{ width: `${Math.max(score * 100, 1)}%` }}
+        />
+      </div>
+      <span className={`text-xs font-medium w-[48px] text-right ${isHigh ? 'text-error' : 'text-on-surface-variant'}`}>{pct}%</span>
+    </div>
+  )
+}
+
+function PathologyScores({ scores }) {
+  const [expanded, setExpanded] = useState(false)
+  if (!scores) return null
+
+  const top = getTopPathologies(scores, 2)
+  const all = Object.entries(scores).sort(([, a], [, b]) => b - a)
+
+  return (
+    <div className="mt-lg">
+      <div className="flex items-center gap-sm flex-wrap">
+        <span className="text-xs text-secondary uppercase tracking-widest">Top Findings</span>
+        {top.map(([name, score]) => (
+          <span key={name} className={`text-xs px-sm py-0.5 rounded-full border ${score >= 0.5 ? 'border-error/30 bg-error-container text-on-error-container' : 'border-outline-variant bg-surface-container-low text-on-surface-variant'}`}>
+            {name} {(score * 100).toFixed(1)}%
+          </span>
+        ))}
+      </div>
+
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="mt-sm text-xs text-primary hover:text-primary-container flex items-center gap-xs transition-colors"
+      >
+        <span className="material-symbols-outlined text-[16px]" style={{ transform: expanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>expand_more</span>
+        {expanded ? 'Hide' : 'View all'} pathology scores
+      </button>
+
+      {expanded && (
+        <div className="mt-sm space-y-xs p-md bg-surface-container-low rounded-lg border border-outline-variant animate-[fadeIn_0.2s_ease-out]">
+          {all.map(([name, score]) => (
+            <PathologyBar key={name} name={name} score={score} />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function formatPrediction(prediction) {
   return prediction === 'pneumonia' ? 'Pneumonia Detected' : 'Normal — No Findings'
 }
@@ -198,16 +259,17 @@ export default function XRayScreening() {
               </div>
             </div>
             <div className="px-xl py-xl bg-surface-container-low border-t border-outline-variant">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-xl">
-                <div className="space-y-xs">
+              <div className="flex flex-col md:flex-row md:items-start justify-between gap-xl">
+                <div className="space-y-xs flex-1">
                   <h4 className={`text-lg font-semibold ${priority.heading}`}>{formatPrediction(result.prediction)}</h4>
                   <p className="text-sm text-on-surface-variant">
                     Confidence: <span className="font-semibold text-on-surface">{(result.confidence * 100).toFixed(1)}%</span>
                     <span className="mx-sm text-outline">·</span>
                     Model: <span className="font-semibold text-on-surface">{result.model_used}</span>
                   </p>
+                  <PathologyScores scores={result.pathology_scores} />
                 </div>
-                <button onClick={reset} className="bg-primary text-on-primary py-sm px-xl rounded-lg hover:opacity-90 transition-opacity">
+                <button onClick={reset} className="bg-primary text-on-primary py-sm px-xl rounded-lg hover:opacity-90 transition-opacity shrink-0">
                   Analyze Another
                 </button>
               </div>
