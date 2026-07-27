@@ -9,7 +9,7 @@ from captum.attr import LayerGradCam
 from matplotlib import colormaps
 from PIL import Image
 
-from config import settings
+from app_config import settings
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
