@@ -29,7 +29,14 @@ class ModelClient:
             raise ModelServerError("Model server unreachable")
 
         if resp.status_code != 200:
-            raise ModelServerError(f"Model server returned {resp.status_code}")
+            detail = f"Model server returned {resp.status_code}"
+            try:
+                body = resp.json()
+                if "error" in body:
+                    detail += f": {body['error']}"
+            except Exception:
+                pass
+            raise ModelServerError(detail)
 
         return resp.json()
 
