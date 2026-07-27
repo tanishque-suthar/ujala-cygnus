@@ -16,7 +16,6 @@ class ScanResult(Base):
     )
     prediction: Mapped[str] = mapped_column(String, nullable=False)
     confidence: Mapped[float] = mapped_column(Float, nullable=False)
-    priority: Mapped[str] = mapped_column(String, nullable=False, default="low")
     model_used: Mapped[str] = mapped_column(String, nullable=False)
     pathology_scores: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     op_threshs: Mapped[dict | None] = mapped_column(JSON, nullable=True)
