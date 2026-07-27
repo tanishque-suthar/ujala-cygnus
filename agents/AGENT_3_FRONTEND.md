@@ -32,7 +32,7 @@ Full medical portal UI. Upload chest X-ray images, display screening results (he
   - Lung Opacity special rule: if Lung Opacity is flagged AND at least one of Consolidation/Infiltration/Effusion is also flagged → Lung Opacity is suppressed from the flagged list
   - If Lung Opacity is flagged alone → relabeled as "General Opacity (nonspecific)"
 - **Detailed scores** (collapsed by default): toggle "View detailed pathology scores ▾" — all 18 pathologies sorted descending, neutral gray progress bars, labels say "model score" in spirit, with caveat: "These are raw model scores, not calibrated probabilities."
-- No priority badge, no prediction heading, no confidence percentage displayed
+- No prediction heading or confidence percentage displayed
 
 ## API Integration
 - `POST /screen` — upload image + patient name, receive screening results (includes `pathology_scores`, `op_threshs`, `heatmap_base64`, `model_used`)

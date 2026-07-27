@@ -57,7 +57,7 @@ Stream original image / heatmap PNG from disk via `FileResponse`.
 ## Database Schema
 - **Patient** — `id`, `name`, `created_at`
 - **Document** — `id`, `patient_id` (FK), `document_type`, `file_path`, `filename`, `created_at`
-- **ScanResult** — `id`, `document_id` (FK, unique), `prediction`, `confidence`, `priority`, `model_used`, `heatmap_path`, `analyzed_at`
+- **ScanResult** — `id`, `document_id` (FK, unique), `prediction`, `confidence`, `model_used`, `heatmap_path`, `analyzed_at`
 
 ## Rules
 - Never perform inference or preprocessing — always delegate to Model Server
