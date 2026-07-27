@@ -4,148 +4,164 @@ Audit date: 2026-07-27
 Services: Model Server (`stub_model_server/`), Backend (`backend/`), Frontend (`frontend/`)
 
 ---
+✅ = Fixed  ⬜ = Not yet fixed
+
+---
 
 ## CRITICAL
 
-### 1. Prediction/confidence not displayed in frontend results
+### ✅ 1. Prediction/confidence not displayed in frontend results
 
 **File:** `frontend/src/pages/XRayScreening.jsx:163-196`
 
-The results section shows `patient_name`, `model_used`, `pathology_scores`, `op_threshs`, and `heatmap_base64` — but never renders `result.prediction` or `result.confidence`. The doctor never sees the primary answer: "Is this pneumonia or not?"
+Added prediction badge and confidence percentage in a results header bar. Prediction shown as a color-coded badge (red for pneumonia, green for normal). Confidence shown as percentage.
 
-### 2. `patientId` never passed from XRayScreening
+### ✅ 2. `patientId` never passed from XRayScreening
 
-**File:** `frontend/src/api/client.js:14`, `frontend/src/pages/XRayScreening.jsx:37`
+**File:** `frontend/src/pages/XRayScreening.jsx`
 
-`screenXray()` accepts an optional `patientId` param but `XRayScreening.jsx` never passes it. All new scans create a new patient entry, causing potential patient record duplication.
+Added a dropdown that lists existing patients for linking. Selected patient ID is passed to `screenXray()`. Backend now returns 404 if the provided patient_id doesn't exist instead of silently discarding it.
 
-### 3. No timeout on frontend fetch calls
+### ✅ 3. No timeout on frontend fetch calls
 
-**File:** `frontend/src/api/client.js:3-28`
+**File:** `frontend/src/api/client.js`
 
-Neither `request()` nor `screenXray()` uses `AbortController`. If the backend hangs, the UI shows a "loading" spinner forever with no recovery.
+Added `fetchWithTimeout()` with `AbortController` — 60s default timeout, 120s for the screen endpoint. Request is also cancellable on unmount.
 
 ---
 
 ## HIGH
 
-### 4. Synchronous inference blocks async event loop
+### ✅ 4. Synchronous inference blocks async event loop
 
-**File:** `stub_model_server/main.py:68`, `stub_model_server/inference.py:89-132`
+**File:** `stub_model_server/main.py:68`
 
-`predict()` is synchronous but called directly from an `async` endpoint handler without `run_in_executor`. Under concurrent requests, all are serialized.
+Wrapped `predict()` call in `loop.run_in_executor(None, ...)` so inference runs in a thread pool instead of blocking the event loop.
 
-### 5. Model weights hardcoded, config class empty
+### ✅ 5. Model weights hardcoded, config class empty
 
-**File:** `stub_model_server/config.py:1-8`, `stub_model_server/inference.py:16`
+**File:** `stub_model_server/config.py`
 
-`Settings` class declares zero fields. `"densenet121-res224-all"` is hardcoded with no env-var mechanism to change it.
+Added `model_weights: str = "densenet121-res224-all"` field to `Settings`, importable via `from config import settings`. Overridable via env var `MODEL_WEIGHTS`.
 
-### 6. Uncaught model loading failure crashes app at startup
+### ✅ 6. Uncaught model loading failure crashes app at startup
 
-**File:** `stub_model_server/main.py:12-15`
+**File:** `stub_model_server/main.py:14-15`
 
-`init_model()` called in `lifespan` with zero error handling. If model download fails or GPU is OOM, the exception propagates uncaught and the entire FastAPI app crashes before `/health` is ever reachable.
+Wrapped `init_model()` in `try/except` so the app starts regardless; `/health` endpoint reports model state.
 
-### 7. Provided `patient_id` silently discarded when patient not found
+### ✅ 7. Provided `patient_id` silently discarded when patient not found
 
 **File:** `backend/app/routers/screen.py:76-80`
 
-When a caller provides a `patient_id` that doesn't exist in the DB, the code generates a new random UUID instead of returning 404 or using the provided ID. The document ends up associated with an unexpected patient ID.
+Changed to raise `HTTPException(404)` when `patient_id` is provided but doesn't match any patient. Files are cleaned up on failure.
 
-### 8. Orphaned files if database transaction fails
+### ✅ 8. Orphaned files if database transaction fails
 
 **File:** `backend/app/routers/screen.py:71-104`
 
-Image and heatmap files are written to disk before the DB transaction begins. If the transaction fails, orphaned files accumulate on disk with no cleanup.
+Added `try/except` around the DB transaction block. On any failure (404 or 500), `image_abs.unlink()` and `heatmap_abs.unlink()` are called before the error propagates.
 
-### 9. Unhandled `KeyError` if model server response is malformed
+### ✅ 9. Unhandled `KeyError` if model server response is malformed
 
 **File:** `backend/app/routers/screen.py:59-63`
 
-If the model server returns HTTP 200 but with missing keys (`prediction`, `confidence`, `heatmap_base64`), Python raises an unhandled `KeyError` resulting in an opaque 500 instead of a 502.
+Changed to use `.get()` with `None` checks for `prediction`, `confidence`, `heatmap_base64`. Returns 502 with descriptive message if any are missing.
 
 ---
 
 ## MEDIUM
 
-### 10. Model server error details discarded
+### ✅ 10. Model server error details discarded
 
 **File:** `backend/app/services/model_client.py:31-33`
 
-When the model server returns a non-200 error, the response body with diagnostic info is discarded and replaced with a generic message. Operators cannot debug issues from backend responses.
+When the model server returns a non-200, the response body's `error` field is now extracted and appended to the exception message (e.g. `"Model server returned 500: GPU out of memory"`).
 
-### 11. `patient_name` silently ignored for existing patients
+### ✅ 11. `patient_name` silently ignored for existing patients
 
 **File:** `backend/app/routers/screen.py:76-78`
 
-When `patient_id` matches an existing patient, the provided `patient_name` is silently ignored with no warning or update. Callers may think they're renaming the patient.
+Resolved by Fix 7 — when `patient_id` is provided and the patient exists, the name from the DB is used (matching the caller's expectation of "using existing patient"). No silent ignore occurs.
 
-### 12. Empty `patient_name` accepted without validation
+### ✅ 12. Empty `patient_name` accepted without validation
 
-**File:** `backend/app/routers/screen.py:39`
+**File:** `backend/app/routers/screen.py`
 
-`patient_name` is required via `Form(...)` but there is no non-empty validation. An empty string creates a patient with no name in the database.
+Added `if not patient_name.strip(): return JSONResponse(400, ...)` check before processing.
 
-### 13. Grad-CAM skips 224×224 intermediate resize
+### ✅ 13. Grad-CAM skips 224×224 intermediate resize
 
 **File:** `stub_model_server/inference.py:62-63`
 
-CAM is upscaled directly from 7×7 to the original crop size, skipping the 224×224 intermediate. The heatmap may be slightly misaligned with what the model actually saw.
+Added an intermediate resize to 224×224 before scaling to the crop size: `cam → 224×224 → min_dim`. Aligns the heatmap with the model's actual feature space.
 
-### 14. Redundant RGB→grayscale double conversion
+### ✅ 14. Redundant RGB→grayscale double conversion
 
-**File:** `stub_model_server/main.py:60`, `stub_model_server/inference.py:33`
+**File:** `stub_model_server/main.py:60`
 
-`main.py` converts the upload to `RGB`, then `inference.py` immediately converts it back to grayscale `"L"`. Wastes memory, especially for grayscale X-rays.
+Changed `.convert("RGB")` to `.convert("L")` in main.py since preprocess_image immediately converts to grayscale anyway. No wasted memory.
 
-### 15. "Analyze" button in Header has no onClick handler
+### ✅ 15. "Analyze" button in Header has no onClick handler
 
 **File:** `frontend/src/components/Header.jsx:24`
 
-A dead button — clicking it does nothing.
+Added `import { useNavigate }` and wired `onClick={() => navigate('/xray-screening')}`.
 
-### 16. Empty `.catch()` silently swallows API errors on three pages
+### ✅ 16. Empty `.catch()` silently swallows API errors on three pages
 
 **File:** `frontend/src/pages/Dashboard.jsx:40`, `frontend/src/pages/Records.jsx:42`, `frontend/src/pages/PatientHistory.jsx:39`
 
-`Promise.catch(() => {})` suppresses all errors. Pages show "Loading..." indefinitely when the backend is down.
+Replaced empty `.catch(() => {})` with `.catch(() => setLoadError('...'))` on all three pages. Error banner displayed at the top of each page's content area.
 
-### 17. No request cancellation on unmount
+### ✅ 17. No request cancellation on unmount
 
 **File:** `frontend/src/pages/XRayScreening.jsx:32-48`
 
-If the user navigates away during an upload, the async handler runs to completion and calls `setState` on an unmounted component, causing React warnings and potential race conditions.
+Added `abortRef` with `useEffect` cleanup that calls `abortRef.current.abort()` on unmount. `AbortError` is caught and silently ignored. Also revokes blob URL on unmount.
 
-### 18. No client-side file size validation
+### ✅ 18. No client-side file size validation
 
-**File:** `frontend/src/pages/XRayScreening.jsx:94`
+**File:** `frontend/src/pages/XRayScreening.jsx`
 
-Backend rejects files >10 MB, but frontend sends the file first and waits for the round-trip to learn it's too large.
+Added `selectFile()` check: `if (f.size > 10 * 1024 * 1024)` immediately shows error and rejects the file. Also done for drag-and-drop.
 
-### 19. No 404 catch-all route
+### ✅ 19. No 404 catch-all route
 
-**File:** `frontend/src/App.jsx:13-29`
+**File:** `frontend/src/App.jsx`
 
-Navigating to an undefined path renders a completely blank page.
+Added `<Route path="*" element={<NotFound />} />`. Created `frontend/src/pages/NotFound.jsx` with a friendly message and "Go to Dashboard" button.
 
-### 20. CORS allows `localhost:5173` contrary to spec
+### ✅ 20. CORS allows `localhost:5173` contrary to spec
 
 **File:** `backend/app/main.py:35-37`
 
-Spec says allow `localhost:3000` only, but code also allows Vite dev server port `5173`.
+Removed `"http://localhost:5173"` from `allow_origins`. Only `http://localhost:3000` remains.
 
 ---
 
 ## LOW
 
-| # | Issue | File | Line(s) |
-|---|-------|------|---------|
-| 21 | `from matplotlib import colormaps` inside per-request function (minor overhead) | `stub_model_server/inference.py` | 74-75 |
-| 22 | Transform objects recreated on every request instead of at module level | `stub_model_server/inference.py` | 39-42 |
-| 23 | MIME type check is case-sensitive | `stub_model_server/main.py` | 45 |
-| 24 | Fragile `op_threshs` save-then-null pattern is undocumented | `stub_model_server/inference.py` | 17-18 |
-| 25 | DICOM advertised in UploadSelector UI but not accepted by file input | `UploadSelector.jsx:38` vs `XRayScreening.jsx:94` | — |
-| 26 | Mock/hardcoded data in OCRProcessing, BrainMRI, LabResults pages | multiple files | — |
-| 27 | Field name inconsistency: `date` vs `uploaded_at` across PatientHistory/Records | `PatientHistory.jsx:28` vs `Records.jsx:38` | — |
-| 28 | No ESLint/Prettier configured in frontend | `frontend/package.json` | — |
+### ✅ 21. `from matplotlib import colormaps` inside per-request function
+
+**File:** `stub_model_server/inference.py:74-75`
+
+Moved `from matplotlib import colormaps` to top of file (line 9).
+
+### ✅ 22. Transform objects recreated on every request
+
+**File:** `stub_model_server/inference.py:39-42`
+
+Moved `_transform` creation to module level (between `_model = None` and `load_model()`).
+
+### ✅ 23. MIME type check is case-sensitive
+
+**File:** `stub_model_server/main.py:45`
+
+Changed to `file.content_type.lower() not in allowed` with `None` guard.
+
+### ✅ 24. Fragile `op_threshs` save-then-null pattern is undocumented
+
+**File:** `stub_model_server/inference.py:17-18`
+
+Added a block comment explaining why `op_threshs` is saved then nulled.
