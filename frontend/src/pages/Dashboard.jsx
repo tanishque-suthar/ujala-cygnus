@@ -3,12 +3,6 @@ import { Link, useNavigate } from 'react-router-dom'
 import MainLayout from '../components/MainLayout'
 import { fetchPatientStats, fetchPatients } from '../api/client'
 
-const PRIORITY_COLOR = {
-  high: 'bg-error-container',
-  moderate: 'bg-[#fef3c7]',
-  low: 'bg-tertiary-fixed-dim',
-}
-
 const DOC_TYPE_LABEL = {
   xray: 'Chest X-Ray',
   brain_mri: 'Brain MRI',
