@@ -1,3 +1,4 @@
+import asyncio
 import io
 from contextlib import asynccontextmanager
 
@@ -11,7 +12,10 @@ from inference import init_model, predict
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    init_model()
+    try:
+        init_model()
+    except Exception:
+        pass  # /health will report model state
     yield
 
 
@@ -42,7 +46,7 @@ async def health():
 @app.post("/predict")
 async def predict_endpoint(file: UploadFile = File(...)):
     allowed = {"image/jpeg", "image/png"}
-    if file.content_type not in allowed:
+    if file.content_type is None or file.content_type.lower() not in allowed:
         return JSONResponse(
             status_code=400,
             content={"error": "File must be JPEG or PNG"},
@@ -57,7 +61,7 @@ async def predict_endpoint(file: UploadFile = File(...)):
         )
 
     try:
-        image = Image.open(io.BytesIO(contents)).convert("RGB")
+        image = Image.open(io.BytesIO(contents)).convert("L")
     except Exception:
         return JSONResponse(
             status_code=400,
@@ -65,7 +69,8 @@ async def predict_endpoint(file: UploadFile = File(...)):
         )
 
     try:
-        result = predict(image)
+        loop = asyncio.get_running_loop()
+        result = await loop.run_in_executor(None, predict, image)
         return result
     except Exception as e:
         return JSONResponse(

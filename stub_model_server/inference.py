@@ -6,14 +6,25 @@ import torch
 import torchvision
 import torchxrayvision as xrv
 from captum.attr import LayerGradCam
+from matplotlib import colormaps
 from PIL import Image
+
+from config import settings
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 _model = None
 
+_transform = torchvision.transforms.Compose([
+    xrv.datasets.XRayCenterCrop(),
+    xrv.datasets.XRayResizer(224),
+])
+
 def load_model():
-    model = xrv.models.DenseNet(weights="densenet121-res224-all", apply_sigmoid=False)
+    # Save original op_threshs before nulling them: the model checks
+    # op_threshs internally and applies a second sigmoid if not None.
+    # We handle sigmoid + threshold comparison manually in predict().
+    model = xrv.models.DenseNet(weights=settings.model_weights, apply_sigmoid=False)
     model.saved_op_threshs = model.op_threshs
     model.op_threshs = None
     model.eval()
@@ -36,12 +47,7 @@ def preprocess_image(image: Image.Image):
     # Add channel dimension -> shape (1, H, W)
     img = img[np.newaxis, ...]
     
-    transform = torchvision.transforms.Compose([
-        xrv.datasets.XRayCenterCrop(),
-        xrv.datasets.XRayResizer(224),
-    ])
-    
-    img = transform(img)
+    img = _transform(img)
     
     # Convert to tensor, unsqueeze batch dim -> final shape (1, 1, 224, 224)
     pixel_values = torch.from_numpy(img).unsqueeze(0).to(DEVICE)
@@ -58,8 +64,10 @@ def _generate_gradcam(model, pixel_values, target_idx, original_image):
     w, h = original_image.size
     min_dim = min(h, w)
     
-    # Resize cam to match the cropped square size, not the full image
+    # Resize through 224x224 first to match the model's actual feature space,
+    # then up to the cropped square size for overlay alignment
     cam_pil = Image.fromarray(cam.astype(np.float32))
+    cam_pil = cam_pil.resize((224, 224), Image.Resampling.BICUBIC)
     cam_pil = cam_pil.resize((min_dim, min_dim), Image.Resampling.BICUBIC)
     cam_resized_square = np.array(cam_pil, dtype=np.float32)
     
@@ -71,7 +79,6 @@ def _generate_gradcam(model, pixel_values, target_idx, original_image):
     # Place the square heatmap into the correct center position
     cam_full[start_y:start_y + min_dim, start_x:start_x + min_dim] = cam_resized_square
 
-    from matplotlib import colormaps
     heatmap_rgba = colormaps["inferno"](cam_full)
     heatmap_rgb = (heatmap_rgba[:, :, :3] * 255).astype(np.uint8)
 
