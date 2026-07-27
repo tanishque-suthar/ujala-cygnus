@@ -1,4 +1,7 @@
+import { useNavigate } from 'react-router-dom'
+
 export default function Header() {
+  const navigate = useNavigate()
   return (
     <header className="fixed top-0 left-[260px] right-0 h-16 bg-surface dark:bg-surface-dim border-b border-outline-variant dark:border-outline flex justify-between items-center px-margin z-40">
       <div className="flex items-center gap-4 flex-1">
@@ -21,7 +24,7 @@ export default function Header() {
             <span className="material-symbols-outlined">help_outline</span>
           </button>
         </div>
-        <button className="bg-primary text-on-primary px-4 py-2 rounded-lg text-sm font-semibold hover:bg-primary-container transition-all active:scale-95">
+        <button onClick={() => navigate('/xray-screening')} className="bg-primary text-on-primary px-4 py-2 rounded-lg text-sm font-semibold hover:bg-primary-container transition-all active:scale-95">
           Analyze
         </button>
         <div className="flex items-center gap-3">

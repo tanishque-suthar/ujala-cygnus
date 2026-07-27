@@ -22,6 +22,7 @@ export default function Records() {
   const navigate = useNavigate()
   const [documents, setDocuments] = useState([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(null)
   const [filter, setFilter] = useState('all')
 
   useEffect(() => {
@@ -39,7 +40,7 @@ export default function Records() {
           .sort((a, b) => new Date(b.uploaded_at) - new Date(a.uploaded_at))
         setDocuments(flat)
       })
-      .catch(() => {})
+      .catch(() => setLoadError('Failed to load records'))
       .finally(() => setLoading(false))
   }, [])
 
@@ -65,6 +66,13 @@ export default function Records() {
           ))}
         </div>
       </div>
+
+      {loadError && (
+        <div className="w-full bg-error-container text-on-error-container text-sm px-md py-sm rounded-lg flex items-center gap-sm mb-lg">
+          <span className="material-symbols-outlined text-[18px]">error</span>
+          {loadError}
+        </div>
+      )}
 
       {loading ? (
         <div className="text-sm text-on-surface-variant p-lg">Loading…</div>

@@ -24,6 +24,7 @@ export default function Dashboard() {
   const [stats, setStats] = useState({ total_patients: null, total_documents: null })
   const [patients, setPatients] = useState([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(null)
 
   useEffect(() => {
     Promise.all([fetchPatientStats(), fetchPatients()])
@@ -31,7 +32,7 @@ export default function Dashboard() {
         setStats(s)
         setPatients(p)
       })
-      .catch(() => {})
+      .catch(() => setLoadError('Failed to load dashboard data'))
       .finally(() => setLoading(false))
   }, [])
 
@@ -46,11 +47,17 @@ export default function Dashboard() {
   return (
     <MainLayout>
       <div className="max-w-container-max mx-auto space-y-lg">
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-lg items-end">
-          <div className="md:col-span-8">
-            <h2 className="text-2xl font-bold text-on-background">Medical Dashboard</h2>
-            <p className="text-base text-on-surface-variant mt-base">Welcome back, Dr. Sharma. Here is an overview of your medical records and pending tasks.</p>
-          </div>
+          {loadError && (
+            <div className="w-full bg-error-container text-on-error-container text-sm px-md py-sm rounded-lg flex items-center gap-sm mb-lg">
+              <span className="material-symbols-outlined text-[18px]">error</span>
+              {loadError}
+            </div>
+          )}
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-lg items-end">
+            <div className="md:col-span-8">
+              <h2 className="text-2xl font-bold text-on-background">Medical Dashboard</h2>
+              <p className="text-base text-on-surface-variant mt-base">Welcome back, Dr. Sharma. Here is an overview of your medical records and pending tasks.</p>
+            </div>
           <div className="md:col-span-4 flex justify-end gap-sm">
             <div className="bg-surface border border-outline-variant p-4 rounded-lg flex items-center gap-4 w-full">
               <div className="p-3 bg-primary-fixed text-primary rounded-lg">

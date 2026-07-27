@@ -14,6 +14,7 @@ export default function PatientHistory() {
   const navigate = useNavigate()
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(null)
 
   useEffect(() => {
     fetchPatients()
@@ -35,7 +36,7 @@ export default function PatientHistory() {
           .sort((a, b) => new Date(b.date) - new Date(a.date))
         setRows(flat)
       })
-      .catch(() => {})
+      .catch(() => setLoadError('Failed to load patient history'))
       .finally(() => setLoading(false))
   }, [])
 
@@ -45,6 +46,12 @@ export default function PatientHistory() {
         <h2 className="text-2xl font-bold">Patient History</h2>
         <p className="text-on-surface-variant">Complete chronological record of medical interactions.</p>
       </div>
+      {loadError && (
+        <div className="w-full bg-error-container text-on-error-container text-sm px-md py-sm rounded-lg flex items-center gap-sm mb-lg">
+          <span className="material-symbols-outlined text-[18px]">error</span>
+          {loadError}
+        </div>
+      )}
       <div className="bg-white border border-outline-variant rounded-xl overflow-hidden">
         {loading ? (
           <div className="p-lg text-sm text-on-surface-variant">Loading…</div>
