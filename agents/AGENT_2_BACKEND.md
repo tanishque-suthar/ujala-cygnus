@@ -19,12 +19,16 @@ Application layer between Frontend and Model Server. Receives image uploads with
 **Behavior:**
 1. Validate file type (`image/jpeg` or `image/png`) → `400` if invalid
 2. Validate file size ≤ 10 MB → `413` if exceeded
-3. Forward to Model Server `POST /predict` (30s timeout) → `502` on failure
-4. Save image to `database/uploads/images/{doc_id}.{ext}`
-5. Decode heatmap base64 and save to `database/uploads/heatmaps/{scan_id}.png`
-6. Create/link Patient, Document, ScanResult records in SQLite
-7. Pass through `op_threshs` from Model Server response unchanged
-8. Return ScreenResponse
+3. Validate `patient_name` is non-empty → `400` if blank
+4. Forward to Model Server `POST /predict` (30s timeout) → `502` on failure (with server error detail if available)
+5. Validate model server response contains required keys (`prediction`, `confidence`, `heatmap_base64`) → `502` if malformed
+6. Save image to `database/uploads/images/{doc_id}.{ext}`
+7. Decode heatmap base64 and save to `database/uploads/heatmaps/{scan_id}.png`
+8. Create/link Patient, Document, ScanResult records in SQLite
+   - If `patient_id` provided but not found → `404` (files cleaned up)
+   - If `patient_id` not provided → create new Patient
+9. Pass through `op_threshs` from Model Server response unchanged
+10. Return ScreenResponse
 
 **Response (200):**
 ```json

@@ -42,7 +42,7 @@ Uses `captum.attr.LayerGradCam` targeting `model.features[-1]` (the final DenseB
    - If none exceeded (prediction is `"normal"`) → target is the overall highest-scoring pathology (any pathology, including `"Lung Opacity"`), so a meaningful heatmap is always generated
 3. Compute Grad-CAM attribution for the target index
 4. ReLU + normalize the activation map to [0, 1]
-5. Resize to original image dimensions (bicubic interpolation)
+5. Resize through 224×224 first (matching the model's feature space), then to the cropped image dimensions (bicubic interpolation)
 6. Apply `inferno` colormap from matplotlib
 7. Blend with original RGB image using intensity-scaled alpha (max 75% — hotter regions show more heatmap, cooler regions show more original)
 8. Encode overlay as PNG → base64 string (no `data:` URI prefix)
@@ -53,10 +53,11 @@ Uses `captum.attr.LayerGradCam` targeting `model.features[-1]` (the final DenseB
 |---|---|
 | `inference.py` | Model loading, preprocessing, Grad-CAM, prediction logic |
 | `main.py` | FastAPI app, lifespan, endpoints, CORS |
-| `config.py` | Pydantic settings (currently minimal, extensible via env vars) |
+| `app_config.py` | Pydantic settings (`model_weights` field, overridable via `MODEL_WEIGHTS` env var) |
 | `requirements.txt` | Python dependencies |
 
 Note: the inference module is named `inference.py` (not `model.py`) to avoid shadowing torchxrayvision's internal `model` package which breaks its `jfhealthcare` baseline import chain.
+Note: the config module is named `app_config.py` (not `config.py`) to avoid shadowing torchxrayvision's internal `config` package.
 
 ## Endpoints
 
@@ -102,7 +103,7 @@ When no pathology exceeds its threshold:
 The `prediction` field is `"normal"` and `confidence` is `0.0`. A heatmap is still generated against the overall highest-scoring pathology.
 
 **Errors:**
-- `400` — invalid file type or unreadable image
+- `400` — invalid file type, unreadable image, or oversized file
 - `500` — inference failure with `{"error": "<detail>"}`
 
 ## Dependencies
