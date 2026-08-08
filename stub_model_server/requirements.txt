@@ -10,3 +10,5 @@ torchvision>=0.15.0
 torchxrayvision>=0.0.37
 scikit-image>=0.21.0
 captum>=0.7.0
+open-clip-torch>=2.24.0
+timm>=1.0.0

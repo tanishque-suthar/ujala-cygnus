@@ -7,7 +7,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from PIL import Image
 
-from inference import init_model, predict
+from inference import init_model, predict, get_model
+from app_config import settings
 
 
 @asynccontextmanager
@@ -31,15 +32,13 @@ app.add_middleware(
 
 @app.get("/health")
 async def health():
-    from inference import get_model
-
     try:
         get_model()
-        return {"status": "ok", "model_loaded": True}
+        return {"status": "ok", "model_loaded": True, "model_backend": settings.model_backend}
     except RuntimeError:
         return JSONResponse(
             status_code=503,
-            content={"status": "error", "model_loaded": False},
+            content={"status": "error", "model_loaded": False, "model_backend": settings.model_backend},
         )
 
 
@@ -61,7 +60,7 @@ async def predict_endpoint(file: UploadFile = File(...)):
         )
 
     try:
-        image = Image.open(io.BytesIO(contents)).convert("L")
+        image = Image.open(io.BytesIO(contents))
     except Exception:
         return JSONResponse(
             status_code=400,
