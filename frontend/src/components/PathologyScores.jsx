@@ -1,54 +1,64 @@
 import { useState } from 'react'
 
-const LUNG_OPACITY_SUPPRESS_ON = new Set(['Consolidation', 'Infiltration', 'Effusion'])
+// These labels are not clinical pathologies and are suppressed from the findings list.
+// 'support device' gets its own chip; 'lung opacity' is silently dropped (nonspecific).
+const NON_PATHOLOGY_LABELS = new Set(['lung opacity', 'support device'])
+
+function capitalize(str) {
+  return str.replace(/(^\w|\s\w)/g, c => c.toUpperCase())
+}
 
 function getFlaggedFindings(scores, opThreshs) {
-  if (!scores || !opThreshs) return []
+  if (!scores || !opThreshs) return { pathologyFindings: [], supportDeviceDetected: false }
 
-  let flagged = Object.entries(scores).filter(
+  const flagged = Object.entries(scores).filter(
     ([name, score]) => opThreshs[name] != null && score >= opThreshs[name]
   )
 
-  const loEntry = flagged.find(([name]) => name === 'Lung Opacity')
-  if (loEntry) {
-    const hasMoreSpecific = flagged.some(
-      ([name]) => LUNG_OPACITY_SUPPRESS_ON.has(name)
-    )
-    if (hasMoreSpecific) {
-      flagged = flagged.filter(([name]) => name !== 'Lung Opacity')
-    } else {
-      flagged = flagged.map(([name, score]) =>
-        name === 'Lung Opacity' ? ['General Opacity (nonspecific)', score] : [name, score]
-      )
-    }
-  }
+  const supportDeviceDetected = flagged.some(([name]) => name.toLowerCase() === 'support device')
+  const pathologyFindings = flagged
+    .filter(([name]) => !NON_PATHOLOGY_LABELS.has(name.toLowerCase()))
+    .sort(([, a], [, b]) => b - a)
 
-  return flagged.sort(([, a], [, b]) => b - a)
+  return { pathologyFindings, supportDeviceDetected }
 }
 
-function FlaggedFindings({ findings }) {
-  if (findings.length === 0) {
-    return (
-      <div className="flex items-center gap-sm text-on-surface-variant">
-        <span className="material-symbols-outlined text-[18px]">check_circle</span>
-        <span className="text-sm font-medium">No findings above threshold</span>
-      </div>
-    )
-  }
+function FlaggedFindings({ pathologyFindings, supportDeviceDetected }) {
+  const hasAny = pathologyFindings.length > 0 || supportDeviceDetected
 
   return (
     <div className="space-y-sm">
-      <span className="text-xs text-secondary uppercase tracking-widest">Flagged Findings</span>
-      <div className="flex flex-wrap gap-sm">
-        {findings.map(([name]) => (
-          <span
-            key={name}
-            className="text-xs font-medium px-sm py-0.5 rounded-full bg-error-container text-on-error-container border border-error/30"
-          >
-            {name}
+      {supportDeviceDetected && (
+        <div className="flex flex-wrap gap-sm">
+          <span className="text-xs font-medium px-sm py-0.5 rounded-full bg-tertiary-container text-on-tertiary-container border border-tertiary/30 flex items-center gap-xs">
+            <span className="material-symbols-outlined text-[14px]">devices</span>
+            Support Device Detected
           </span>
-        ))}
-      </div>
+        </div>
+      )}
+
+      {pathologyFindings.length > 0 && (
+        <div className="space-y-sm">
+          <span className="text-xs text-secondary uppercase tracking-widest">Flagged Findings</span>
+          <div className="flex flex-wrap gap-sm">
+            {pathologyFindings.map(([name]) => (
+              <span
+                key={name}
+                className="text-xs font-medium px-sm py-0.5 rounded-full bg-error-container text-on-error-container border border-error/30"
+              >
+                {capitalize(name)}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {!hasAny && (
+        <div className="flex items-center gap-sm text-on-surface-variant">
+          <span className="material-symbols-outlined text-[18px]">check_circle</span>
+          <span className="text-sm font-medium">No findings above threshold</span>
+        </div>
+      )}
     </div>
   )
 }
@@ -57,7 +67,9 @@ function PathologyBar({ name, score }) {
   const pct = (score * 100).toFixed(1)
   return (
     <div className="flex items-center gap-md">
-      <span className="text-xs text-on-surface-variant w-[180px] shrink-0 truncate" title={name}>{name}</span>
+      <span className="text-xs text-on-surface-variant w-[200px] shrink-0 truncate" title={capitalize(name)}>
+        {capitalize(name)}
+      </span>
       <div className="flex-1 h-[6px] bg-surface-container-high rounded-full overflow-hidden">
         <div
           className="h-full rounded-full bg-secondary transition-all duration-500"
@@ -73,18 +85,26 @@ export default function PathologyScores({ scores, opThreshs }) {
   const [expanded, setExpanded] = useState(false)
   if (!scores) return null
 
-  const flagged = getFlaggedFindings(scores, opThreshs)
+  const { pathologyFindings, supportDeviceDetected } = getFlaggedFindings(scores, opThreshs)
   const allSorted = Object.entries(scores).sort(([, a], [, b]) => b - a)
 
   return (
     <div className="space-y-md">
-      <FlaggedFindings findings={flagged} />
+      <FlaggedFindings
+        pathologyFindings={pathologyFindings}
+        supportDeviceDetected={supportDeviceDetected}
+      />
 
       <button
         onClick={() => setExpanded(!expanded)}
         className="text-xs text-primary hover:text-primary-container flex items-center gap-xs transition-colors"
       >
-        <span className="material-symbols-outlined text-[16px]" style={{ transform: expanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>expand_more</span>
+        <span
+          className="material-symbols-outlined text-[16px]"
+          style={{ transform: expanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}
+        >
+          expand_more
+        </span>
         {expanded ? 'Hide' : 'View'} detailed pathology scores
       </button>
 

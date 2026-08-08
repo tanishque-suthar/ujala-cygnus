@@ -54,6 +54,11 @@ async def screen(
 
     client: ModelClient = request.app.state.model_client
 
+    # Update active model name before predicting to ensure it is not stale
+    health_data = await client.health()
+    if health_data.get("status") == "ok":
+        request.app.state.active_model_name = health_data.get("model_backend", "unknown")
+
     try:
         result = await client.predict(body, file.filename or "image")
     except ModelServerError as e:
@@ -101,7 +106,7 @@ async def screen(
                     document_id=doc_id,
                     prediction=prediction,
                     confidence=confidence,
-                    model_used=settings.active_model_name,
+                    model_used=request.app.state.active_model_name,
                     pathology_scores=pathology_scores,
                     op_threshs=op_threshs,
                     heatmap_path=str(heatmap_abs),
@@ -119,7 +124,7 @@ async def screen(
     return ScreenResponse(
         prediction=prediction,
         confidence=confidence,
-        model_used=settings.active_model_name,
+        model_used=request.app.state.active_model_name,
         heatmap_base64=heatmap_b64,
         pathology_scores=pathology_scores,
         op_threshs=op_threshs,

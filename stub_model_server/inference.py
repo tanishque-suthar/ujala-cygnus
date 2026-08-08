@@ -114,29 +114,41 @@ def _generate_gradcam(model, pixel_values: torch.Tensor, target_idx: int, origin
     input_tensor = pixel_values.clone().requires_grad_(True)
 
     if backend == "biomedclip":
-        target_layer = model.encoder.trunk.blocks[-1]
+        # ViT: the conv patch embed emits a real 2D spatial map (14×14).
+        # The last transformer block outputs token vectors, not a spatial map,
+        # so its LayerGradCam attribution collapses to a 1D vector.
+        target_layer = model.encoder.trunk.patch_embed.proj
     else:
         target_layer = model.features[-1]
 
     layer_gc = LayerGradCam(model, target_layer)
     attribution = layer_gc.attribute(input_tensor, target=target_idx)
     cam = torch.relu(attribution).squeeze().cpu().detach().numpy()
-    cam = cam / (cam.max() + 1e-8)
+    cam = cam.mean(axis=0) if cam.ndim == 3 else cam
+    cam_max = float(cam.max())
+    cam = cam / cam_max if cam_max > 1e-12 else np.zeros_like(cam)
 
     w, h = original_image.size
-    min_dim = min(h, w)
 
-    # Resize through 224×224 first to match the model's actual feature space,
-    # then up to the cropped square size for overlay alignment
     cam_pil = Image.fromarray(cam.astype(np.float32))
-    cam_pil = cam_pil.resize((224, 224), Image.Resampling.BICUBIC)
-    cam_pil = cam_pil.resize((min_dim, min_dim), Image.Resampling.BICUBIC)
-    cam_resized_square = np.array(cam_pil, dtype=np.float32)
 
-    cam_full = np.zeros((h, w), dtype=np.float32)
-    start_y = (h - min_dim) // 2
-    start_x = (w - min_dim) // 2
-    cam_full[start_y:start_y + min_dim, start_x:start_x + min_dim] = cam_resized_square
+    if backend == "biomedclip":
+        # BiomedCLIP resizes the whole image to 224x224 without cropping.
+        # So we stretch the heatmap directly back to the original image dimensions.
+        cam_pil = cam_pil.resize((w, h), Image.Resampling.BICUBIC)
+        cam_full = np.array(cam_pil, dtype=np.float32)
+    else:
+        # DenseNet uses CenterCrop to a square of min(h, w).
+        # We resize to that square and center it on the canvas.
+        min_dim = min(h, w)
+        cam_pil = cam_pil.resize((224, 224), Image.Resampling.BICUBIC)
+        cam_pil = cam_pil.resize((min_dim, min_dim), Image.Resampling.BICUBIC)
+        cam_resized_square = np.array(cam_pil, dtype=np.float32)
+
+        cam_full = np.zeros((h, w), dtype=np.float32)
+        start_y = (h - min_dim) // 2
+        start_x = (w - min_dim) // 2
+        cam_full[start_y:start_y + min_dim, start_x:start_x + min_dim] = cam_resized_square
 
     heatmap_rgba = colormaps["inferno"](cam_full)
     heatmap_rgb = (heatmap_rgba[:, :, :3] * 255).astype(np.uint8)
@@ -218,7 +230,7 @@ def _predict_biomedclip(image: Image.Image) -> dict:
     candidates = [
         (i, label, float(probs[i]))
         for i, label in enumerate(BIOMEDCLIP_LABELS)
-        if float(probs[i]) >= thresholds[label]
+        if label not in ["lung opacity", "support device"] and float(probs[i]) >= thresholds[label]
     ]
 
     if candidates:

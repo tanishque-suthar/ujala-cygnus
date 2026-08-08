@@ -3,6 +3,9 @@ const BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
 function fetchWithTimeout(url, options = {}, timeoutMs = 60000) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+  if (options.signal) {
+    options.signal.addEventListener('abort', () => controller.abort());
+  }
   return fetch(url, { ...options, signal: controller.signal })
     .finally(() => clearTimeout(timer));
 }
