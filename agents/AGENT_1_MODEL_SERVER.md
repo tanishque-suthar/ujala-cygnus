@@ -38,7 +38,7 @@ Two backends are supported, selected at startup via the `MODEL_BACKEND` env var 
 6. If any → pick highest-scoring as prediction; its score = `confidence`
 7. If none → `prediction = "normal"`, `confidence = 0.0`; Grad-CAM targets highest-scoring label
 
-**Grad-CAM target:** `model.encoder.trunk.blocks[-1]` (last ViT transformer block)
+**Grad-CAM target (ViT backend):** `model.encoder.trunk.patch_embed.proj` (the Conv2d patch stem, 14×14 spatial map). Do **not** target `trunk.blocks[-1]` — the last block outputs token vectors, so its LayerGradCam attribution collapses to a 1D vector and the heatmap becomes invisible (fixed 2026-08-08). Attribution is ReLU'd, channel-averaged, normalized by its own max, upscaled via 224×224 to a centered square, then blended with the inferno colormap at `alpha = cam * 0.75`.
 
 ---
 
@@ -144,7 +144,7 @@ When no pathology exceeds its threshold:
 Inference runs off the event loop via `asyncio.get_running_loop().run_in_executor()` so the model call does not block the async server.
 
 ## Grad-CAM notes (ViT backend)
-ViT Grad-CAM attribution is more diffuse than CNN Grad-CAM because self-attention aggregates globally. Heatmaps will look less localized than DenseNet's — this is expected. The same two-step resize (224×224 → min_dim) and centered canvas placement logic is used for both backends.
+ViT Grad-CAM attribution is more diffuse than CNN Grad-CAM because self-attention aggregates globally. Heatmaps will look less localized than DenseNet's — this is expected. The same two-step resize (224×224 → min_dim) and centered canvas placement logic is used for both backends. For the ViT the CAM is taken at the conv patch embed (14×14), giving a true spatial map.
 
 ## Dependencies
 `torch`, `torchvision`, `open-clip-torch`, `timm`, `torchxrayvision`, `captum`, `scikit-image`, `fastapi`, `uvicorn[standard]`, `python-multipart`, `pydantic-settings`, `Pillow`, `numpy`, `matplotlib`

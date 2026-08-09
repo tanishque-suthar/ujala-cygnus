@@ -28,13 +28,16 @@ Full medical portal UI. Upload chest X-ray images, display screening results (he
 - **MainLayout** — composes Sidebar + Header + content area
 
 ## X-Ray Screening Results Display
-- Prediction badge (red for pneumonia, green for normal) and confidence percentage in a header bar
+- Prediction badge (red for any non-normal finding, green for normal) with label capitalized for display
 - Side-by-side original image and Grad-CAM heatmap overlay
-- Model name displayed in the results footer
-- **Flagged Findings** (default view): pathologies where `score >= op_threshs[name]`, shown as red badges with no numeric score. If zero flagged → "No findings above threshold"
-  - Lung Opacity special rule: if Lung Opacity is flagged AND at least one of Consolidation/Infiltration/Effusion is also flagged → Lung Opacity is suppressed from the flagged list
-  - If Lung Opacity is flagged alone → relabeled as "General Opacity (nonspecific)"
-- **Detailed scores** (collapsed by default): toggle "View detailed pathology scores ▾" — all 18 pathologies sorted descending, neutral gray progress bars, labels say "model score" in spirit, with caveat: "These are raw model scores, not calibrated probabilities."
+- Model name displayed in the results footer (sourced from `model_used` in backend response — never hardcoded)
+- **Findings display** — driven by `NON_PATHOLOGY_LABELS = {'lung opacity', 'support device'}`:
+  - `support device`: shown as a distinct amber chip ("Support Device Detected") if flagged above threshold — not listed under pathology findings
+  - `lung opacity`: silently suppressed from displayed findings (nonspecific co-occurring descriptor; still shown in detailed scores)
+  - All other labels where `score >= op_threshs[name]` → shown as red badges under "Flagged Findings", sorted descending by score
+  - If no pathology findings AND no support device → "No findings above threshold"
+- **Detailed scores** (collapsed by default): toggle "View detailed pathology scores ▾" — all 13 labels sorted descending, neutral gray progress bars, with caveat: "These are raw model scores, not calibrated probabilities."
+- All labels capitalized for display via `str.replace(/(^\w|\s\w)/g, c => c.toUpperCase())`
 
 ## X-Ray Screening Upload
 - Patient name input (required, validated non-empty)

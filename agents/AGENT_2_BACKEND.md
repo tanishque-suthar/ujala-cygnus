@@ -8,8 +8,12 @@ Application layer between Frontend and Model Server. Receives image uploads with
 
 ## Key Config (env vars)
 - `MODEL_SERVER_URL` — default `http://localhost:8001`
-- `ACTIVE_MODEL_NAME` — default `densenet121`
 - DB at `database/cygnus.db`, uploads at `database/uploads/`
+
+## Active model name
+`model_used` is **not** a static config value. At startup, the backend calls the model server `GET /health` and reads `model_backend` from the response, storing it on `app.state.active_model_name`. This is then used in all `ScanResult` DB rows and `ScreenResponse` objects, so `model_used` always reflects what the model server is actually running.
+
+If the model server is unreachable at startup, `app.state.active_model_name` defaults to `"unknown"` — the `/screen` endpoint still works normally.
 
 ## Endpoints
 
@@ -33,13 +37,27 @@ Application layer between Frontend and Model Server. Receives image uploads with
 **Response (200):**
 ```json
 {
-  "prediction": "Consolidation",
-  "confidence": 0.87,
-  "model_used": "densenet121",
+  "prediction": "enlarged cardiomediastinum",
+  "confidence": 0.62,
+  "model_used": "biomedclip",
   "heatmap_base64": "...",
-  "pathology_scores": {"Consolidation": 0.87, "Atelectasis": 0.12, "Lung Opacity": 0.31, ...},
-  "op_threshs": {"Atelectasis": 0.0742, "Consolidation": 0.0383, "Pneumonia": 0.0568, "Lung Opacity": 0.2020, ...},
-  "timestamp": "2026-07-26T10:00:00Z",
+  "pathology_scores": {
+    "enlarged cardiomediastinum": 0.6241,
+    "cardiomegaly": 0.5179,
+    "pneumonia": 0.1077,
+    "lung opacity": 0.215,
+    "support device": 0.236,
+    ...
+  },
+  "op_threshs": {
+    "enlarged cardiomediastinum": 0.5,
+    "cardiomegaly": 0.55,
+    "pneumonia": 0.3,
+    "lung opacity": 0.45,
+    "support device": 0.4,
+    ...
+  },
+  "timestamp": "2026-08-08T10:00:00Z",
   "document_id": "uuid",
   "patient_id": "uuid",
   "patient_name": "Jane Doe"

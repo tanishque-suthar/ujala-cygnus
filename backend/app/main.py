@@ -23,7 +23,10 @@ async def lifespan(app: FastAPI):
     settings.images_dir.mkdir(parents=True, exist_ok=True)
     settings.heatmaps_dir.mkdir(parents=True, exist_ok=True)
     await asyncio.to_thread(_run_migrations)
-    app.state.model_client = ModelClient()
+    client = ModelClient()
+    app.state.model_client = client
+    health_data = await client.health()
+    app.state.active_model_name = health_data.get("model_backend", "unknown")
     yield
     await app.state.model_client.close()
 

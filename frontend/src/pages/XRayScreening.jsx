@@ -225,7 +225,7 @@ export default function XRayScreening() {
                     ? 'bg-tertiary-container text-on-tertiary-container'
                     : 'bg-error-container text-error'
                 }`}>
-                  {result.prediction}
+                  {result.prediction.replace(/(^\w|\s\w)/g, c => c.toUpperCase())}
                 </span>
               </div>
               <div className="flex items-center gap-md">

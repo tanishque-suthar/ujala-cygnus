@@ -7,5 +7,6 @@ opencode.json
 venv
 database/
 eval/
-biomedclip/
+.agents/
 person1_bacteria_1.jpeg
+biomedclip/*.pt
