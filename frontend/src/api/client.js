@@ -1,7 +1,17 @@
 const BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
+function fetchWithTimeout(url, options = {}, timeoutMs = 60000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  if (options.signal) {
+    options.signal.addEventListener('abort', () => controller.abort());
+  }
+  return fetch(url, { ...options, signal: controller.signal })
+    .finally(() => clearTimeout(timer));
+}
+
 async function request(path, options = {}) {
-  const res = await fetch(`${BASE}${path}`, options);
+  const res = await fetchWithTimeout(`${BASE}${path}`, options);
   if (!res.ok) {
     const body = await res.json().catch(() => ({ error: "Unknown error" }));
     const err = new Error(body.error || `Request failed (${res.status})`);
@@ -11,13 +21,13 @@ async function request(path, options = {}) {
   return res.json();
 }
 
-export async function screenXray(file, patientName, patientId = null) {
+export async function screenXray(file, patientName, patientId = null, signal = null) {
   const form = new FormData();
   form.append("file", file);
   form.append("patient_name", patientName);
   if (patientId) form.append("patient_id", patientId);
 
-  const res = await fetch(`${BASE}/screen`, { method: "POST", body: form });
+  const res = await fetchWithTimeout(`${BASE}/screen`, { method: "POST", body: form, signal }, 120000);
   if (!res.ok) {
     const body = await res.json().catch(() => ({ error: "Unknown error" }));
     const err = new Error(body.error || `Request failed (${res.status})`);

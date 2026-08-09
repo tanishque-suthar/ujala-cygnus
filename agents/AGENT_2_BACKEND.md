@@ -4,103 +4,85 @@
 FastAPI, Python. Runs on `localhost:8000`.
 
 ## Responsibility
-Application layer between Frontend and Model Server. Receives image
-uploads, forwards to Model Server for inference, applies business logic
-(priority mapping), and returns a formatted response. Owns validation.
+Application layer between Frontend and Model Server. Receives image uploads with patient data, forwards to Model Server for inference, persists results in SQLite, and returns a formatted response.
 
-## Endpoint
+## Key Config (env vars)
+- `MODEL_SERVER_URL` — default `http://localhost:8001`
+- DB at `database/cygnus.db`, uploads at `database/uploads/`
+
+## Active model name
+`model_used` is **not** a static config value. At startup, the backend calls the model server `GET /health` and reads `model_backend` from the response, storing it on `app.state.active_model_name`. This is then used in all `ScanResult` DB rows and `ScreenResponse` objects, so `model_used` always reflects what the model server is actually running.
+
+If the model server is unreachable at startup, `app.state.active_model_name` defaults to `"unknown"` — the `/screen` endpoint still works normally.
+
+## Endpoints
 
 ### `POST /screen`
-
-**Request:** `multipart/form-data`
-- `file`: image file (jpeg/png)
+**Request:** `multipart/form-data` — `file` (image), `patient_name` (required), `patient_id` (optional).
 
 **Behavior:**
-1. Validate the uploaded file:
-   - Must be `image/jpeg` or `image/png`
-   - Max size: 10 MB (reject larger with `413`)
-   - If invalid, return `400` with `{"error": "<reason>"}`
-2. Forward the file to Model Server at `http://localhost:8001/predict`
-   (use env var `MODEL_SERVER_URL`, default `http://localhost:8001`, so
-   this can be changed later without code changes)
-3. If Model Server returns an error or is unreachable, return `502` with
-   `{"error": "Model server unavailable"}`
-4. On success, map `confidence` to a `priority` field:
-   - `confidence >= 0.85` → `"high"`
-   - `0.6 <= confidence < 0.85` → `"moderate"`
-   - `confidence < 0.6` → `"low"`
-   (Only apply priority mapping when `prediction == "pneumonia"`. If
-   `prediction == "normal"`, set `priority` to `"low"` regardless of
-   confidence.)
-5. Return combined response.
+1. Validate file type (`image/jpeg` or `image/png`) → `400` if invalid
+2. Validate file size ≤ 10 MB → `413` if exceeded
+3. Validate `patient_name` is non-empty → `400` if blank
+4. Forward to Model Server `POST /predict` (30s timeout) → `502` on failure (with server error detail if available)
+5. Validate model server response contains required keys (`prediction`, `confidence`, `heatmap_base64`) → `502` if malformed
+6. Save image to `database/uploads/images/{doc_id}.{ext}`
+7. Decode heatmap base64 and save to `database/uploads/heatmaps/{scan_id}.png`
+8. Create/link Patient, Document, ScanResult records in SQLite
+   - If `patient_id` provided but not found → `404` (files cleaned up)
+   - If `patient_id` not provided → create new Patient
+9. Pass through `op_threshs` from Model Server response unchanged
+10. Return ScreenResponse
 
-**Response:** `200 OK`, JSON:
+**Response (200):**
 ```json
 {
-  "prediction": "pneumonia",
-  "confidence": 0.91,
-  "priority": "high",
-  "model_used": "densenet121",
-  "heatmap_base64": "iVBORw0KGgoAAAANSUhEUgAA...",
-  "timestamp": "2026-07-13T10:00:00Z"
+  "prediction": "enlarged cardiomediastinum",
+  "confidence": 0.62,
+  "model_used": "biomedclip",
+  "heatmap_base64": "...",
+  "pathology_scores": {
+    "enlarged cardiomediastinum": 0.6241,
+    "cardiomegaly": 0.5179,
+    "pneumonia": 0.1077,
+    "lung opacity": 0.215,
+    "support device": 0.236,
+    ...
+  },
+  "op_threshs": {
+    "enlarged cardiomediastinum": 0.5,
+    "cardiomegaly": 0.55,
+    "pneumonia": 0.3,
+    "lung opacity": 0.45,
+    "support device": 0.4,
+    ...
+  },
+  "timestamp": "2026-08-08T10:00:00Z",
+  "document_id": "uuid",
+  "patient_id": "uuid",
+  "patient_name": "Jane Doe"
 }
 ```
 
-Field rules:
-- `prediction`, `confidence`, `heatmap_base64`: passed through unchanged
-  from Model Server response
-- `priority`: string, one of `"low"`, `"moderate"`, `"high"` — computed
-  here, not by Model Server
-- `model_used`: string, hardcoded/config value naming which model is
-  currently deployed on the Model Server (e.g. `"densenet121"`) — set via
-  env var `ACTIVE_MODEL_NAME`
-- `timestamp`: ISO 8601 UTC timestamp of when the request was processed
-
-## Health check endpoint
-
 ### `GET /health`
-Response: `200 OK`, `{"status": "ok", "model_server_reachable": true}`
-(should actually ping Model Server's `/health` to determine the second
-field)
+Pings Model Server `/health` and returns `{"status": "ok", "model_server_reachable": bool}`.
 
-## Explicit rules
-- Do not perform inference or preprocessing here — always delegate to
-  Model Server.
-- Do not add a database or persistence layer unless explicitly asked later.
-- CORS: allow requests from Frontend only (`localhost:3000`).
-- Timeout on the Model Server call: 30 seconds, then treat as failure (`502`).
+### `GET /patients` & `GET /patients/stats`
+List all patients with record counts. Stats returns totals.
 
-## Database & Storage Decisions
+### `GET /patients/{patient_id}`
+Patient details with nested documents and scan results.
 
-### SQLite & SQLAlchemy ORM
-- Database path configured absolutely from project root to `database/cygnus.db` using settings configured in `app/config.py`.
-- Managed via SQLAlchemy ORM models: `Patient`, `Document`, and `ScanResult`.
-- Migration history handled via **Alembic**; run migrations via async engine setup (`alembic/env.py`).
+### `GET /image/{document_id}` & `GET /heatmap/{scan_result_id}`
+Stream original image / heatmap PNG from disk via `FileResponse`.
 
-### File Storage
-- Uploaded original files stored on disk: `database/uploads/images/{document_id}.{ext}`.
-- Model heatmaps stored on disk: `database/uploads/heatmaps/{scan_result_id}.png`.
-- DB records reference relative pathways, and endpoints stream them to the frontend.
+## Database Schema
+- **Patient** — `id`, `name`, `created_at`
+- **Document** — `id`, `patient_id` (FK), `document_type`, `file_path`, `filename`, `created_at`
+- **ScanResult** — `id`, `document_id` (FK, unique), `prediction`, `confidence`, `model_used`, `heatmap_path`, `analyzed_at`
 
-### Schema Relationships
-- `Patient` (1) ↔ (N) `Document` (has UUID, name, created_at timestamp).
-- `Document` (1) ↔ (0..1) `ScanResult` (contains prediction, confidence, computed priority, model used, and heatmap path).
-- Discriminator `document_type` (e.g. `"xray"`) dynamically tags documents without schema constraints.
-
-### Updated Endpoint Actions
-
-#### `POST /screen`
-- Accepts `file` (UploadFile), `patient_name` (Form parameter), and optional `patient_id` (Form parameter).
-- Automatically links to patient if `patient_id` exists, or instantiates a new `Patient` record.
-- Writes files to disk, maps DB relationships, saves `ScanResult`, and returns `ScreenResponse` (extended with `document_id`, `patient_id`, and `patient_name`).
-
-#### `GET /patients` & `GET /patients/stats`
-- Lists all patients with `record_count`.
-- Returns stats containing total counts of patients and documents.
-
-#### `GET /patients/{patient_id}`
-- Returns nested patient details + document list with their respective scan results.
-
-#### `GET /image/{document_id}` & `GET /heatmap/{scan_result_id}`
-- Files are read from storage and streamed via `FileResponse` with correct MIME types.
-
+## Rules
+- Never perform inference or preprocessing — always delegate to Model Server
+- CORS: allow `localhost:3000` only
+- Timeout on Model Server: 30s → `502`
+- `pathology_scores` and `op_threshs` are passed through from Model Server response unchanged

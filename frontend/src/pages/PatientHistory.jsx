@@ -14,6 +14,7 @@ export default function PatientHistory() {
   const navigate = useNavigate()
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(null)
 
   useEffect(() => {
     fetchPatients()
@@ -27,7 +28,6 @@ export default function PatientHistory() {
               date: d.uploaded_at,
               category: DOC_TYPE_LABEL[d.document_type] ?? d.document_type,
               filename: d.filename,
-              priority: d.scan_result?.priority ?? null,
             }))
           })
         )
@@ -36,7 +36,7 @@ export default function PatientHistory() {
           .sort((a, b) => new Date(b.date) - new Date(a.date))
         setRows(flat)
       })
-      .catch(() => {})
+      .catch(() => setLoadError('Failed to load patient history'))
       .finally(() => setLoading(false))
   }, [])
 
@@ -46,6 +46,12 @@ export default function PatientHistory() {
         <h2 className="text-2xl font-bold">Patient History</h2>
         <p className="text-on-surface-variant">Complete chronological record of medical interactions.</p>
       </div>
+      {loadError && (
+        <div className="w-full bg-error-container text-on-error-container text-sm px-md py-sm rounded-lg flex items-center gap-sm mb-lg">
+          <span className="material-symbols-outlined text-[18px]">error</span>
+          {loadError}
+        </div>
+      )}
       <div className="bg-white border border-outline-variant rounded-xl overflow-hidden">
         {loading ? (
           <div className="p-lg text-sm text-on-surface-variant">Loading…</div>
@@ -59,7 +65,6 @@ export default function PatientHistory() {
                 <th className="px-lg py-4">Patient</th>
                 <th className="px-lg py-4">Category</th>
                 <th className="px-lg py-4">File</th>
-                <th className="px-lg py-4">Priority</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-outline-variant">
@@ -80,25 +85,6 @@ export default function PatientHistory() {
                   <td className="px-lg py-4 text-sm">{row.category}</td>
                   <td className="px-lg py-4 text-sm text-on-surface-variant truncate max-w-[180px]" title={row.filename}>
                     {row.filename}
-                  </td>
-                  <td className="px-lg py-4">
-                    {row.priority ? (
-                      <span
-                        className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${
-                          row.priority === 'high'
-                            ? 'bg-error-container text-error'
-                            : row.priority === 'moderate'
-                            ? 'bg-[#fef3c7] text-[#92400e]'
-                            : 'bg-tertiary-container text-on-tertiary-container'
-                        }`}
-                      >
-                        {row.priority}
-                      </span>
-                    ) : (
-                      <span className="px-3 py-1 rounded-full text-xs font-bold uppercase bg-secondary-container">
-                        N/A
-                      </span>
-                    )}
                   </td>
                 </tr>
               ))}

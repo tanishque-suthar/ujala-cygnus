@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import MainLayout from '../components/MainLayout'
+import PathologyScores from '../components/PathologyScores'
 import { fetchPatients, fetchPatientDocuments, imageUrl } from '../api/client'
 
 const DOC_TYPE_LABEL = {
@@ -21,6 +22,7 @@ export default function Records() {
   const navigate = useNavigate()
   const [documents, setDocuments] = useState([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(null)
   const [filter, setFilter] = useState('all')
 
   useEffect(() => {
@@ -38,7 +40,7 @@ export default function Records() {
           .sort((a, b) => new Date(b.uploaded_at) - new Date(a.uploaded_at))
         setDocuments(flat)
       })
-      .catch(() => {})
+      .catch(() => setLoadError('Failed to load records'))
       .finally(() => setLoading(false))
   }, [])
 
@@ -64,6 +66,13 @@ export default function Records() {
           ))}
         </div>
       </div>
+
+      {loadError && (
+        <div className="w-full bg-error-container text-on-error-container text-sm px-md py-sm rounded-lg flex items-center gap-sm mb-lg">
+          <span className="material-symbols-outlined text-[18px]">error</span>
+          {loadError}
+        </div>
+      )}
 
       {loading ? (
         <div className="text-sm text-on-surface-variant p-lg">Loading…</div>
@@ -109,17 +118,12 @@ export default function Records() {
                 <p className="text-xs text-primary mt-1 truncate">{doc.patient_name}</p>
               )}
               {doc.scan_result && (
-                <span
-                  className={`mt-2 inline-block px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                    doc.scan_result.priority === 'high'
-                      ? 'bg-error-container text-error'
-                      : doc.scan_result.priority === 'moderate'
-                      ? 'bg-[#fef3c7] text-[#92400e]'
-                      : 'bg-tertiary-fixed-dim text-on-tertiary-fixed-variant'
-                  }`}
-                >
-                  {doc.scan_result.priority}
-                </span>
+                <div className="mt-2">
+                  <PathologyScores
+                    scores={doc.scan_result.pathology_scores}
+                    opThreshs={doc.scan_result.op_threshs}
+                  />
+                </div>
               )}
             </div>
           ))}

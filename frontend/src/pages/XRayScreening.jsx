@@ -1,16 +1,9 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import MainLayout from '../components/MainLayout'
-import { screenXray } from '../api/client'
+import PathologyScores from '../components/PathologyScores'
+import { screenXray, fetchPatients } from '../api/client'
 
-const PRIORITY_STYLES = {
-  high: { bg: 'bg-error', text: 'text-on-error', label: 'HIGH PRIORITY', icon: 'warning', heading: 'text-error' },
-  moderate: { bg: 'bg-[#f59e0b]', text: 'text-white', label: 'MODERATE PRIORITY', icon: 'info', heading: 'text-[#f59e0b]' },
-  low: { bg: 'bg-tertiary', text: 'text-on-tertiary', label: 'LOW PRIORITY', icon: 'check_circle', heading: 'text-tertiary' },
-}
-
-function formatPrediction(prediction) {
-  return prediction === 'pneumonia' ? 'Pneumonia Detected' : 'Normal — No Findings'
-}
+const MAX_FILE_SIZE = 10 * 1024 * 1024
 
 export default function XRayScreening() {
   const [state, setState] = useState('upload')
@@ -20,10 +13,30 @@ export default function XRayScreening() {
   const [error, setError] = useState(null)
   const [dragActive, setDragActive] = useState(false)
   const [patientName, setPatientName] = useState('')
+  const [selectedPatientId, setSelectedPatientId] = useState('')
+  const [patients, setPatients] = useState([])
   const inputRef = useRef(null)
+  const abortRef = useRef(null)
+
+  useEffect(() => {
+    fetchPatients()
+      .then(setPatients)
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (abortRef.current) abortRef.current.abort()
+      if (preview) URL.revokeObjectURL(preview)
+    }
+  }, [preview])
 
   const selectFile = useCallback((f) => {
     if (!f) return
+    if (f.size > MAX_FILE_SIZE) {
+      setError('File exceeds the 10 MB size limit.')
+      return
+    }
     setFile(f)
     setPreview(URL.createObjectURL(f))
     setError(null)
@@ -40,13 +53,22 @@ export default function XRayScreening() {
 
   const handleAnalyze = async () => {
     if (!canAnalyze) return
+    const controller = new AbortController()
+    abortRef.current = controller
     setState('loading')
     setError(null)
     try {
-      const data = await screenXray(file, patientName.trim())
+      const data = await screenXray(
+        file,
+        patientName.trim(),
+        selectedPatientId || null,
+        controller.signal
+      )
+      if (controller.signal.aborted) return
       setResult(data)
       setState('results')
     } catch (err) {
+      if (err.name === 'AbortError') return
       let message = err.message || 'Something went wrong'
       if (err.status === 413) message = 'File exceeds the 10 MB size limit.'
       else if (err.status === 502) message = 'Model server is unavailable. Please try again later.'
@@ -57,6 +79,7 @@ export default function XRayScreening() {
   }
 
   const reset = () => {
+    if (abortRef.current) abortRef.current.abort()
     setState('upload')
     setFile(null)
     if (preview) URL.revokeObjectURL(preview)
@@ -64,9 +87,8 @@ export default function XRayScreening() {
     setResult(null)
     setError(null)
     setPatientName('')
+    setSelectedPatientId('')
   }
-
-  const priority = result ? (PRIORITY_STYLES[result.priority] || PRIORITY_STYLES.low) : null
 
   return (
     <MainLayout>
@@ -98,6 +120,24 @@ export default function XRayScreening() {
                   className="w-full px-md py-sm border border-outline-variant rounded-lg bg-surface text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all"
                 />
               </div>
+
+              {patients.length > 0 && (
+                <div className="w-full">
+                  <label className="block text-sm font-medium text-on-surface mb-xs">
+                    Link to existing patient (optional)
+                  </label>
+                  <select
+                    value={selectedPatientId}
+                    onChange={(e) => setSelectedPatientId(e.target.value)}
+                    className="w-full px-md py-sm border border-outline-variant rounded-lg bg-surface text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all"
+                  >
+                    <option value="">— New patient —</option>
+                    {patients.map((p) => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               <input
                 ref={inputRef}
@@ -173,15 +213,25 @@ export default function XRayScreening() {
 
         {state === 'results' && result && (
           <div className="bg-surface-container-lowest w-full max-w-[960px] border border-outline-variant rounded-xl overflow-hidden mx-auto">
-            <div className="px-xl py-lg border-b border-outline-variant flex justify-between items-center">
-              <div>
-                <h3 className="text-lg font-semibold text-on-surface">Screening Results</h3>
-                <p className="text-xs text-on-surface-variant mt-0.5">Patient: <span className="font-semibold">{result.patient_name}</span></p>
+            <div className="px-xl py-lg border-b border-outline-variant">
+              <h3 className="text-lg font-semibold text-on-surface">Screening Results</h3>
+              <p className="text-xs text-on-surface-variant mt-0.5">Patient: <span className="font-semibold">{result.patient_name}</span></p>
+            </div>
+            <div className="px-xl py-lg border-b border-outline-variant flex flex-wrap gap-lg items-center">
+              <div className="flex items-center gap-md">
+                <span className="text-xs text-secondary uppercase tracking-widest">Prediction</span>
+                <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${
+                  result.prediction === 'normal'
+                    ? 'bg-tertiary-container text-on-tertiary-container'
+                    : 'bg-error-container text-error'
+                }`}>
+                  {result.prediction.replace(/(^\w|\s\w)/g, c => c.toUpperCase())}
+                </span>
               </div>
-              <span className={`${priority.bg} ${priority.text} text-xs px-md py-xs rounded-full flex items-center gap-xs`}>
-                <span className="material-symbols-outlined text-[14px]" style={{ fontVariationSettings: "'FILL' 1" }}>{priority.icon}</span>
-                {priority.label}
-              </span>
+              <div className="flex items-center gap-md">
+                <span className="text-xs text-secondary uppercase tracking-widest">Confidence</span>
+                <span className="text-sm font-semibold">{(result.confidence * 100).toFixed(1)}%</span>
+              </div>
             </div>
             <div className="p-xl grid grid-cols-1 md:grid-cols-2 gap-xl">
               <div className="space-y-sm">
@@ -198,16 +248,14 @@ export default function XRayScreening() {
               </div>
             </div>
             <div className="px-xl py-xl bg-surface-container-low border-t border-outline-variant">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-xl">
-                <div className="space-y-xs">
-                  <h4 className={`text-lg font-semibold ${priority.heading}`}>{formatPrediction(result.prediction)}</h4>
+              <div className="flex flex-col md:flex-row md:items-start justify-between gap-xl">
+                <div className="space-y-xs flex-1">
                   <p className="text-sm text-on-surface-variant">
-                    Confidence: <span className="font-semibold text-on-surface">{(result.confidence * 100).toFixed(1)}%</span>
-                    <span className="mx-sm text-outline">·</span>
                     Model: <span className="font-semibold text-on-surface">{result.model_used}</span>
                   </p>
+                  <PathologyScores scores={result.pathology_scores} opThreshs={result.op_threshs} />
                 </div>
-                <button onClick={reset} className="bg-primary text-on-primary py-sm px-xl rounded-lg hover:opacity-90 transition-opacity">
+                <button onClick={reset} className="bg-primary text-on-primary py-sm px-xl rounded-lg hover:opacity-90 transition-opacity shrink-0">
                   Analyze Another
                 </button>
               </div>

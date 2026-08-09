@@ -6,3 +6,7 @@ opencode.json
 .playwright-mcp
 venv
 database/
+eval/
+.agents/
+person1_bacteria_1.jpeg
+biomedclip/*.pt

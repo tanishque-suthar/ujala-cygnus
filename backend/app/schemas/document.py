@@ -7,8 +7,9 @@ class ScanResultResponse(BaseModel):
     id: str
     prediction: str
     confidence: float
-    priority: str
     model_used: str
+    pathology_scores: dict[str, float] | None = None
+    op_threshs: dict[str, float] | None = None
     analyzed_at: datetime
 
     model_config = {"from_attributes": True}

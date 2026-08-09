@@ -1,0 +1,15 @@
+{
+  "enlarged cardiomediastinum": 0.49999999999999994,
+  "cardiomegaly": 0.5499999999999999,
+  "atelectasis": 0.49999999999999994,
+  "consolidation": 0.44999999999999996,
+  "lung edema": 0.2,
+  "fracture": 0.25,
+  "lung lesion": 0.49999999999999994,
+  "pleural effusion": 0.44999999999999996,
+  "pneumonia": 0.3,
+  "pneumothorax": 0.35,
+  "support device": 0.39999999999999997,
+  "lung opacity": 0.44999999999999996,
+  "pleural other": 0.49999999999999994
+}

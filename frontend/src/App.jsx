@@ -9,6 +9,7 @@ import PatientHistory from './pages/PatientHistory'
 import Records from './pages/Records'
 import Settings from './pages/Settings'
 import PatientProfile from './pages/PatientProfile'
+import NotFound from './pages/NotFound'
 
 export default function App() {
   return (
@@ -24,6 +25,7 @@ export default function App() {
         <Route path="/records" element={<Records />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/patients/:patientId" element={<PatientProfile />} />
+        <Route path="*" element={<NotFound />} />
       </Routes>
     </BrowserRouter>
   )
