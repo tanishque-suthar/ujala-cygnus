@@ -8,7 +8,7 @@ import torch.nn as nn
 
 from app_config import settings
 
-# Resolve relative paths against the project root (parent of stub_model_server/)
+# Resolve relative paths against the project root (parent of model_server/)
 REPO_ROOT = Path(__file__).parent.parent
 
 BIOMEDCLIP_LABELS = [

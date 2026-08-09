@@ -10,3 +10,6 @@ eval/
 .agents/
 person1_bacteria_1.jpeg
 biomedclip/*.pt
+biomedclip/*.pth
+.mailmap
+evaluation/

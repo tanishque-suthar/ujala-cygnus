@@ -19,13 +19,13 @@ cygnus-densenet-migration/
   agents/              Agent instruction files for each service
   backend/             FastAPI application layer, SQLite persistence
   frontend/            React portal (dashboard, upload, patient history)
-  stub_model_server/   Standalone inference server (DenseNet121 + Grad-CAM)
+  model_server/   Standalone inference server (DenseNet121 + Grad-CAM)
   database/            SQLite DB and file uploads
 ```
 
 ## Services
 
-- **Model Server** (`stub_model_server/`) — DenseNet121 inference + Grad-CAM heatmaps, exposed via `GET /health` and `POST /predict`.
+- **Model Server** (`model_server/`) — DenseNet121 inference + Grad-CAM heatmaps, exposed via `GET /health` and `POST /predict`.
 - **Backend** (`backend/`) — Application layer that uploads images, delegates to Model Server, and persists results in SQLite.
 - **Frontend** (`frontend/`) — React portal with X-ray screening, patient records, and a dashboard.
 
