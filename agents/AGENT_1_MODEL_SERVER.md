@@ -36,9 +36,9 @@ Two backends are supported, selected at startup via the `MODEL_BACKEND` env var 
 4. Build `op_threshs` dict from `calibrated_thresholds.json`
 5. Find all labels where `prob >= threshold`
 6. If any → pick highest-scoring as prediction; its score = `confidence`
-7. If none → `prediction = "normal"`, `confidence = 0.0`; Grad-CAM targets highest-scoring label
+7. If none → `prediction = "normal"`, `confidence = 0.0`; XAI heatmap targets highest-scoring label
 
-**Grad-CAM target (ViT backend):** `model.encoder.trunk.patch_embed.proj` (the Conv2d patch stem, 14×14 spatial map). Do **not** target `trunk.blocks[-1]` — the last block outputs token vectors, so its LayerGradCam attribution collapses to a 1D vector and the heatmap becomes invisible (fixed 2026-08-08). Attribution is ReLU'd, channel-averaged, normalized by its own max, upscaled via 224×224 to a centered square, then blended with the inferno colormap at `alpha = cam * 0.75`.
+**XAI heatmap (ViT backend) — Gradient-Weighted Attention Rollout:** Uses class-specific gradient-weighted attention rollout (Chefer et al., CVPR 2021) instead of Grad-CAM. Hooks into `attn_drop` on all 12 transformer blocks to capture attention weight matrices `(num_heads, 197, 197)` and their gradients w.r.t. the target class. For each layer: element-wise multiply attention × gradient, ReLU, average across heads, add identity (residual connection), row-normalize. Multiply across all layers to get rollout matrix. Extract CLS→patches row → reshape to 14×14. Normalize to [0,1], resize to original image dimensions, blend with inferno colormap at `alpha = cam * 0.75`. Requires `sdpa_kernel([SDPBackend.MATH])` context to force timm's SDPA to materialise attention weights.
 
 ---
 
@@ -143,8 +143,8 @@ When no pathology exceeds its threshold:
 
 Inference runs off the event loop via `asyncio.get_running_loop().run_in_executor()` so the model call does not block the async server.
 
-## Grad-CAM notes (ViT backend)
-ViT Grad-CAM attribution is more diffuse than CNN Grad-CAM because self-attention aggregates globally. Heatmaps will look less localized than DenseNet's — this is expected. The same two-step resize (224×224 → min_dim) and centered canvas placement logic is used for both backends. For the ViT the CAM is taken at the conv patch embed (14×14), giving a true spatial map.
+## XAI heatmap notes (ViT backend)
+The BiomedCLIP backend uses **gradient-weighted attention rollout**, not Grad-CAM. Grad-CAM targets the patch embedding Conv2d (first layer), which has no semantic content and produces noisy/random heatmaps. Attention rollout aggregates attention patterns from all 12 transformer blocks, weighted by class-specific gradients, producing spatially meaningful and class-discriminative heatmaps. The 14×14 rollout map is bicubic-upscaled directly to the original image dimensions (no center-crop logic needed since BiomedCLIP resizes without cropping). DenseNet continues to use Captum `LayerGradCam` on `model.features[-1]` with the two-step resize (224×224 → min_dim) and centered canvas placement.
 
 ## Dependencies
-`torch`, `torchvision`, `open-clip-torch`, `timm`, `torchxrayvision`, `captum`, `scikit-image`, `fastapi`, `uvicorn[standard]`, `python-multipart`, `pydantic-settings`, `Pillow`, `numpy`, `matplotlib`
+`torch`, `torchvision`, `open-clip-torch`, `timm`, `torchxrayvision`, `captum` (DenseNet only), `scikit-image`, `fastapi`, `uvicorn[standard]`, `python-multipart`, `pydantic-settings`, `Pillow`, `numpy`, `matplotlib`

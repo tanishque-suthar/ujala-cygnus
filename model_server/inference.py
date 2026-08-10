@@ -1,15 +1,5 @@
 import base64
-import importlib
 import io
-import sys
-
-# Captum may not be installed in this venv (disk full). Fall back to the sibling project venv.
-_SIBLING_SITE = "/home/tsvd/Desktop/projects/cygnus/venv/lib/python3.12/site-packages"
-try:
-    importlib.import_module("captum")
-except ModuleNotFoundError:
-    if _SIBLING_SITE not in sys.path:
-        sys.path.insert(0, _SIBLING_SITE)
 
 import numpy as np
 import torch
@@ -107,44 +97,100 @@ def _preprocess_biomedclip(image: Image.Image) -> torch.Tensor:
     return preprocess(image.convert("RGB")).unsqueeze(0).to(DEVICE)
 
 
-# ── Grad-CAM ──────────────────────────────────────────────────────────────────
+# ── XAI heatmap ───────────────────────────────────────────────────────────────
 
-def _generate_gradcam(model, pixel_values: torch.Tensor, target_idx: int, original_image, backend: str) -> str:
-    from captum.attr import LayerGradCam
+def _gradient_attention_rollout(model, pixel_values: torch.Tensor, target_idx: int) -> np.ndarray:
+    """Class-specific attention rollout for ViT (Chefer et al., CVPR 2021).
+
+    Captures attention weights and their gradients w.r.t. target_idx across
+    all transformer blocks, fuses them with gradient weighting, and rolls up
+    through all layers to produce a (14, 14) spatial attribution map.
+    """
+    attentions: list[torch.Tensor] = []
+    gradients: list[torch.Tensor] = []
+    hooks = []
+
+    def _fwd_hook(module, inp, out):
+        attentions.append(inp[0].detach())
+
+    def _bwd_hook(module, grad_in, grad_out):
+        gradients.append(grad_in[0].detach())
+
+    for block in model.encoder.trunk.blocks:
+        hooks.append(block.attn.attn_drop.register_forward_hook(_fwd_hook))
+        hooks.append(block.attn.attn_drop.register_full_backward_hook(_bwd_hook))
+
     input_tensor = pixel_values.clone().requires_grad_(True)
 
-    if backend == "biomedclip":
-        # ViT: the conv patch embed emits a real 2D spatial map (14×14).
-        # The last transformer block outputs token vectors, not a spatial map,
-        # so its LayerGradCam attribution collapses to a 1D vector.
-        target_layer = model.encoder.trunk.patch_embed.proj
-    else:
-        target_layer = model.features[-1]
+    # timm's Attention.forward skips attn_drop entirely when fused_attn is
+    # True (uses F.scaled_dot_product_attention instead). Temporarily disable
+    # it so the explicit code path fires and our hooks on attn_drop work.
+    saved_fused = []
+    for block in model.encoder.trunk.blocks:
+        saved_fused.append(block.attn.fused_attn)
+        block.attn.fused_attn = False
 
-    layer_gc = LayerGradCam(model, target_layer)
+    try:
+        logits = model(input_tensor)
+        target_score = logits[0, target_idx]
+        model.zero_grad()
+        target_score.backward(retain_graph=False)
+    finally:
+        for block, flag in zip(model.encoder.trunk.blocks, saved_fused):
+            block.attn.fused_attn = flag
+        for h in hooks:
+            h.remove()
+
+    # Backward hooks fire in reverse layer order
+    gradients.reverse()
+
+    num_tokens = attentions[0].size(-1)
+    rollout = torch.eye(num_tokens, device=attentions[0].device)
+
+    for attn, grad in zip(attentions, gradients):
+        attn = attn[0]  # (num_heads, N, N)
+        grad = grad[0]
+        weighted = torch.clamp(attn * grad, min=0)
+        fused = weighted.mean(dim=0)
+        fused = fused + torch.eye(num_tokens, device=fused.device)
+        fused = fused / fused.sum(dim=-1, keepdim=True)
+        rollout = fused @ rollout
+
+    mask = rollout[0, 1:]  # CLS → patches, exclude CLS→CLS
+    mask = mask.reshape(14, 14).cpu().numpy().astype(np.float32)
+    mask_min, mask_max = mask.min(), mask.max()
+    return (mask - mask_min) / (mask_max - mask_min + 1e-8)
+
+
+def _densenet_gradcam(model, pixel_values: torch.Tensor, target_idx: int) -> np.ndarray:
+    """Standard Grad-CAM for DenseNet (CNN). Targets the final DenseBlock."""
+    from captum.attr import LayerGradCam
+    input_tensor = pixel_values.clone().requires_grad_(True)
+    layer_gc = LayerGradCam(model, model.features[-1])
     attribution = layer_gc.attribute(input_tensor, target=target_idx)
     cam = torch.relu(attribution).squeeze().cpu().detach().numpy()
     cam = cam.mean(axis=0) if cam.ndim == 3 else cam
     cam_max = float(cam.max())
-    cam = cam / cam_max if cam_max > 1e-12 else np.zeros_like(cam)
+    return cam / cam_max if cam_max > 1e-12 else np.zeros_like(cam)
+
+
+def _generate_xai_heatmap(model, pixel_values: torch.Tensor, target_idx: int, original_image, backend: str) -> str:
+    if backend == "biomedclip":
+        cam = _gradient_attention_rollout(model, pixel_values, target_idx)
+    else:
+        cam = _densenet_gradcam(model, pixel_values, target_idx)
 
     w, h = original_image.size
-
     cam_pil = Image.fromarray(cam.astype(np.float32))
 
     if backend == "biomedclip":
-        # BiomedCLIP resizes the whole image to 224x224 without cropping.
-        # So we stretch the heatmap directly back to the original image dimensions.
         cam_pil = cam_pil.resize((w, h), Image.Resampling.BICUBIC)
         cam_full = np.array(cam_pil, dtype=np.float32)
     else:
-        # DenseNet uses CenterCrop to a square of min(h, w).
-        # We resize to that square and center it on the canvas.
         min_dim = min(h, w)
         cam_pil = cam_pil.resize((224, 224), Image.Resampling.BICUBIC)
         cam_pil = cam_pil.resize((min_dim, min_dim), Image.Resampling.BICUBIC)
         cam_resized_square = np.array(cam_pil, dtype=np.float32)
-
         cam_full = np.zeros((h, w), dtype=np.float32)
         start_y = (h - min_dim) // 2
         start_x = (w - min_dim) // 2
@@ -201,7 +247,7 @@ def _predict_densenet(image: Image.Image) -> dict:
         )
         target_idx = overall_max[0]
 
-    heatmap_base64 = _generate_gradcam(model, pixel_values, target_idx, image, "densenet")
+    heatmap_base64 = _generate_xai_heatmap(model, pixel_values, target_idx, image, "densenet")
 
     return {
         "prediction": prediction,
@@ -240,7 +286,7 @@ def _predict_biomedclip(image: Image.Image) -> dict:
         confidence = 0.0
         target_idx = int(np.argmax(probs))
 
-    heatmap_base64 = _generate_gradcam(model, pixel_values, target_idx, image, "biomedclip")
+    heatmap_base64 = _generate_xai_heatmap(model, pixel_values, target_idx, image, "biomedclip")
 
     return {
         "prediction": prediction,
