@@ -24,9 +24,10 @@ Application layer between Frontend and Model Server. Receives image/PDF uploads 
 | `app/schemas/` | Pydantic responses: `models.py` (Screen/Health/Error), `patient.py`, `document.py`, `report.py` |
 | `app/routers/` | Endpoints: `screen.py`, `health.py`, `patients.py`, `documents.py`, `reports.py` |
 | `app/services/model_client.py` | httpx client for Model Server (`ModelClient`, `ModelServerError`) |
-| `app/services/ocr_service.py` | Tesseract OCR wrapper + regex field extraction (`OCRService`) |
+| `app/services/ocr_service.py` | Tesseract OCR wrapper: preprocessing, `--psm 6`, PDF text-layer fallback (`pdftotext`), 300 DPI rasterization, mean word confidence (`OCRService`) |
+| `app/services/field_extractor.py` | Pure-text typed field extraction: header fields (patient/date/doctor/facility), report type inference, curated lab-panel ontology (`extract`) — only known tests are captured, no generic key:value noise |
 | `alembic/` + `alembic.ini` | DB migrations (run automatically at startup) |
-| `tests/` | pytest suite (httpx `ASGITransport`, `asyncio_mode = "auto"`) |
+| `tests/` | pytest suite (httpx `ASGITransport`, `asyncio_mode = "auto"`) — includes `/screen`, `/reports/upload`, `/patients`, `/health`, extractor unit tests, and OCR service tests |
 
 ## Database & Migrations
 - Alembic migrations are applied automatically at startup (`command.upgrade(cfg, "head")` in lifespan) — never hand-create tables.
@@ -93,9 +94,9 @@ If the model server is unreachable, `app.state.active_model_name` stays `"unknow
 1. Validate file present & mimetype (`image/jpeg`, `image/png`, `application/pdf`) → `400` if invalid
 2. Validate file size ≤ 20 MB → `413` if exceeded
 3. Save file temporarily to `database/uploads/reports/temp/{temp_id}.{ext}`
-4. Run OCR using `pytesseract` (for images) or `pdf2image` + `pytesseract` (for PDFs)
-5. Run regex heuristics to extract structured fields (patient name, report date, doctor, facility, key-value pairs)
-6. Return `OCRUploadResponse` containing `temp_id`, `filename`, extracted fields, raw text, and page count
+4. Run OCR via `OCRService` — PDFs with an embedded text layer use `pdftotext` (confidence 100.0); otherwise pages are rasterized at 300 DPI, preprocessed (grayscale, upscale, autocontrast, unsharp), and OCR'd with `--psm 6`. Returns text, page count, and mean word confidence
+5. Run typed extraction via `field_extractor.extract(raw_text)` → patient name, ISO-8601 report date, doctor, facility, inferred report type (`lab_panel`/`discharge_summary`/`referral_letter`/`other`), and lab-panel fields (only canonical tests with matching units)
+6. Return `OCRUploadResponse` containing `temp_id`, `filename`, extracted fields, raw text, `page_count`, and `ocr_confidence`
 
 ### `POST /reports/confirm`
 **Request:** JSON body `ReportConfirmRequest` — `temp_id`, `patient_name`, optional `patient_id`, `report_type` (`lab_panel`, `discharge_summary`, `referral_letter`, `other`), optional `report_date`, `doctor_name`, `facility_name`, `extracted_fields` dict, `raw_text`, optional patient demographic fields (`patient_age`, `patient_sex`, `patient_dob`, `patient_contact`, `patient_mrn`, `referring_physician`).
@@ -148,3 +149,4 @@ Stream original image / heatmap PNG from disk via `FileResponse` (media type inf
 - `pathology_scores` and `op_threshs` are passed through from Model Server response unchanged
 - Never create tables manually — add an Alembic migration and let startup apply it
 - Run tests with `pytest` in `backend/` (includes `/screen`, `/reports`, `/patients`, and `/health` tests)
+- OCR extraction regression: `evaluation/eval_ocr.py` scores `field_extractor` against `evaluation/ocr_test_set/` (`.txt` sample + `.expected.json` per case) — run it after touching extraction logic
