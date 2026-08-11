@@ -23,6 +23,7 @@ async def get_document(
         select(Document)
         .where(Document.id == document_id)
         .options(selectinload(Document.scan_result))
+        .options(selectinload(Document.report_result))
     )
     document = (await session.execute(stmt)).scalar_one_or_none()
     if document is None:
@@ -70,6 +71,7 @@ async def list_patient_documents(
         select(Document)
         .where(Document.patient_id == patient_id)
         .options(selectinload(Document.scan_result))
+        .options(selectinload(Document.report_result))
         .order_by(Document.uploaded_at.desc())
     )
     docs = (await session.execute(stmt)).scalars().all()

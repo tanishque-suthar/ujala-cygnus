@@ -23,3 +23,6 @@ class Document(Base):
     scan_result: Mapped["ScanResult | None"] = relationship(
         back_populates="document", cascade="all, delete-orphan", uselist=False
     )
+    report_result: Mapped["ReportResult | None"] = relationship(
+        back_populates="document", cascade="all, delete-orphan", uselist=False
+    )

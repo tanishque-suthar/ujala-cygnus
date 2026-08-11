@@ -25,5 +25,9 @@ class Settings(BaseSettings):
     def heatmaps_dir(self) -> Path:
         return Path(self.uploads_dir) / "heatmaps"
 
+    @property
+    def reports_dir(self) -> Path:
+        return Path(self.uploads_dir) / "reports"
+
 
 settings = Settings()

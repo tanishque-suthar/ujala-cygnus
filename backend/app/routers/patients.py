@@ -63,7 +63,10 @@ async def get_patient(
     stmt = (
         select(Patient)
         .where(Patient.id == patient_id)
-        .options(selectinload(Patient.documents).selectinload(Document.scan_result))
+        .options(
+            selectinload(Patient.documents).selectinload(Document.scan_result),
+            selectinload(Patient.documents).selectinload(Document.report_result)
+        )
     )
     patient = (await session.execute(stmt)).scalar_one_or_none()
     if patient is None:

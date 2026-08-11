@@ -2,6 +2,8 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
+from app.schemas.report import ReportResultResponse
+
 
 class ScanResultResponse(BaseModel):
     id: str
@@ -22,6 +24,7 @@ class DocumentResponse(BaseModel):
     filename: str
     uploaded_at: datetime
     scan_result: ScanResultResponse | None = None
+    report_result: ReportResultResponse | None = None
 
     model_config = {"from_attributes": True}
 
@@ -29,6 +32,13 @@ class DocumentResponse(BaseModel):
 class PatientDetailResponse(BaseModel):
     id: str
     name: str
+    age: int | None = None
+    sex: str | None = None
+    date_of_birth: str | None = None
+    contact: str | None = None
+    mrn: str | None = None
+    referring_physician: str | None = None
+    medical_history: str | None = None
     created_at: datetime
     documents: list[DocumentResponse]
 

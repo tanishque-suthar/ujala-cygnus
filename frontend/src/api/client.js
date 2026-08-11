@@ -55,3 +55,34 @@ export const heatmapUrl = (scanResultId) =>
 export const imageUrl = (documentId) =>
   `${BASE}/image/${documentId}`;
 
+export async function uploadReport(file, signal = null) {
+  const form = new FormData();
+  form.append("file", file);
+  const res = await fetchWithTimeout(`${BASE}/reports/upload`, { method: "POST", body: form, signal }, 120000);
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ error: "Unknown error" }));
+    const err = new Error(body.error || `Request failed (${res.status})`);
+    err.status = res.status;
+    throw err;
+  }
+  return res.json();
+}
+
+export async function confirmReport(data, signal = null) {
+  const res = await fetchWithTimeout(`${BASE}/reports/confirm`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+    signal,
+  }, 60000);
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ error: "Unknown error" }));
+    const err = new Error(body.error || `Request failed (${res.status})`);
+    err.status = res.status;
+    throw err;
+  }
+  return res.json();
+}
+
+export const reportFileUrl = (documentId) =>
+  `${BASE}/reports/${documentId}/file`;

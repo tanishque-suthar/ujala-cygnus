@@ -2,20 +2,20 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import MainLayout from '../components/MainLayout'
 import PathologyScores from '../components/PathologyScores'
-import { fetchPatients, fetchPatientDocuments, imageUrl } from '../api/client'
+import { fetchPatients, fetchPatientDocuments, imageUrl, reportFileUrl } from '../api/client'
 
 const DOC_TYPE_LABEL = {
   xray: 'Chest X-Ray',
   brain_mri: 'Brain MRI',
   ct: 'Abdominal CT',
-  text_report: 'Text Report',
+  report: 'Text Report',
 }
 
 const DOC_TYPE_ICON = {
   xray: 'radiology',
   brain_mri: 'psychology',
   ct: 'biotech',
-  text_report: 'description',
+  report: 'description',
 }
 
 export default function Records() {
@@ -51,7 +51,7 @@ export default function Records() {
     <MainLayout>
       <div className="flex justify-between mb-lg items-center">
         <div className="flex gap-2 flex-wrap">
-          {['all', 'xray', 'brain_mri', 'ct', 'text_report'].map((t) => (
+          {['all', 'xray', 'brain_mri', 'ct', 'report'].map((t) => (
             <button
               key={t}
               onClick={() => setFilter(t)}
@@ -92,7 +92,7 @@ export default function Records() {
             >
               <div className="h-40 rounded-lg bg-black mb-md overflow-hidden">
                 <img
-                  src={imageUrl(doc.id)}
+                  src={doc.document_type === 'report' ? reportFileUrl(doc.id) : imageUrl(doc.id)}
                   alt={doc.filename}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                   onError={(e) => {
@@ -117,7 +117,15 @@ export default function Records() {
               {doc.patient_name && (
                 <p className="text-xs text-primary mt-1 truncate">{doc.patient_name}</p>
               )}
-              {doc.scan_result && (
+              {doc.document_type === 'report' && doc.report_result ? (
+                <div className="mt-2 text-xs bg-surface-container-lowest p-2 rounded border border-outline-variant">
+                  <p className="font-semibold text-on-surface truncate">{doc.report_result.report_type.replace('_', ' ').toUpperCase()}</p>
+                  {doc.report_result.doctor_name && <p className="text-on-surface-variant truncate">Dr. {doc.report_result.doctor_name}</p>}
+                  {doc.report_result.raw_text && (
+                    <p className="mt-1 text-on-surface-variant truncate opacity-70">"{doc.report_result.raw_text.substring(0, 40)}..."</p>
+                  )}
+                </div>
+              ) : doc.scan_result && (
                 <div className="mt-2">
                   <PathologyScores
                     scores={doc.scan_result.pathology_scores}
