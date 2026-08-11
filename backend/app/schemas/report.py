@@ -13,6 +13,7 @@ class OCRUploadResponse(BaseModel):
     extracted_fields: dict[str, str] | None = None
     raw_text: str
     page_count: int = 1
+    ocr_confidence: float | None = None
 
 class ReportConfirmRequest(BaseModel):
     """User-verified fields sent back to persist."""

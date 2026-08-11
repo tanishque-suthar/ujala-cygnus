@@ -15,6 +15,7 @@ from app.models.document import Document
 from app.models.patient import Patient
 from app.models.report_result import ReportResult
 from app.schemas.report import OCRUploadResponse, ReportConfirmRequest, ReportConfirmResponse
+from app.services import field_extractor
 from app.config import settings
 
 router = APIRouter(prefix="/reports", tags=["reports"])
@@ -32,7 +33,7 @@ async def upload_report(request: Request, file: UploadFile = File(...)):
         raise HTTPException(status_code=413, detail="File too large")
     
     temp_id = str(uuid.uuid4())
-    ext = Path(file.filename).suffix
+    ext = Path(file.filename or "").suffix
     temp_filename = f"{temp_id}{ext}"
     temp_path = settings.reports_dir / "temp" / temp_filename
     
@@ -43,26 +44,31 @@ async def upload_report(request: Request, file: UploadFile = File(...)):
         
     ocr_service = request.app.state.ocr_service
     page_count = 1
-    
+    ocr_confidence = None
+
     if file.content_type == "application/pdf":
-        raw_text, page_count = ocr_service.extract_from_pdf(file_bytes)
+        raw_text, page_count, ocr_confidence = ocr_service.extract_from_pdf(file_bytes)
     else:
         image = Image.open(io.BytesIO(file_bytes))
-        raw_text = ocr_service.extract_from_image(image)
-        
-    extracted_fields = ocr_service.extract_fields(raw_text)
-    
+        raw_text, ocr_confidence = ocr_service.extract_from_image(image)
+
+    extracted = field_extractor.extract(raw_text)
+    report_type = extracted["report_type"]
+    if report_type == "other":
+        report_type = None
+
     return OCRUploadResponse(
         temp_id=temp_id,
         filename=file.filename,
-        extracted_patient_name=extracted_fields.pop("patient_name", None),
-        extracted_report_date=extracted_fields.pop("report_date", None),
-        extracted_report_type=None,
-        extracted_doctor_name=extracted_fields.pop("doctor_name", None),
-        extracted_facility_name=extracted_fields.pop("facility_name", None),
-        extracted_fields=extracted_fields,
+        extracted_patient_name=extracted["patient_name"],
+        extracted_report_date=extracted["report_date"],
+        extracted_report_type=report_type,
+        extracted_doctor_name=extracted["doctor_name"],
+        extracted_facility_name=extracted["facility_name"],
+        extracted_fields=extracted["extracted_fields"] or None,
         raw_text=raw_text,
-        page_count=page_count
+        page_count=page_count,
+        ocr_confidence=ocr_confidence
     )
 
 @router.post("/confirm", response_model=ReportConfirmResponse)
