@@ -4,7 +4,7 @@
 React + Vite, Tailwind CSS v3 (Material Design 3 token palette). Runs on `localhost:3000`.
 
 ## Responsibility
-Full medical portal UI. Upload chest X-ray images, display screening results (heatmap, flagged findings, detailed pathology scores), browse records, view patient history. Display only — uses values from Backend as-is; threshold comparisons are done client-side using `op_threshs`.
+Full medical portal UI. Upload chest X-ray images, process text-based medical reports (lab panels, discharge summaries, referral letters via OCR), display screening & report results, browse records, view expanded patient history and demographics. Display only — uses values from Backend as-is; threshold comparisons are done client-side using `op_threshs`.
 
 ## Pages & Routes
 
@@ -12,14 +12,14 @@ Full medical portal UI. Upload chest X-ray images, display screening results (he
 |---|---|---|
 | `/` | Dashboard | Stats cards, recent uploads table |
 | `/upload-selector` | UploadSelector | Choose between Report (OCR) and Scan (X-Ray) |
-| `/ocr-processing` | OCRProcessing | Split-pane report preview + editable OCR form |
+| `/ocr-processing` | OCRProcessing | Three-state report workflow: Upload → Verification → Success |
 | `/xray-screening` | XRayScreening | Upload → loading → results (prediction badge, confidence, heatmap, pathology scores) |
 | `/brain-mri` | BrainMRI | MRI viewer with slice slider, findings, impression |
 | `/lab-results` | LabResults | CBC table with normal/low flags |
 | `/history` | PatientHistory | Chronological table of interactions |
-| `/records` | Records | Card grid of past uploads |
+| `/records` | Records | Card grid of past uploads (X-rays and medical reports) |
 | `/settings` | Settings | Portal configuration (placeholder) |
-| `/patients/:id` | PatientProfile | Patient detail with documents and scan results |
+| `/patients/:id` | PatientProfile | Patient detail with expanded demographics, documents, scan results, and report result view modals |
 | `*` | NotFound | 404 catch-all with navigation back to dashboard |
 
 ## Shared Components
@@ -27,6 +27,25 @@ Full medical portal UI. Upload chest X-ray images, display screening results (he
 - **Header** — fixed top bar with search, notifications, user info
 - **MainLayout** — composes Sidebar + Header + content area
 - **PathologyScores** — findings chip logic + collapsible detailed score bars (used by XRayScreening, Records, PatientProfile)
+
+## OCR Processing Flow (`/ocr-processing`)
+- **State 1: Upload**
+  - Accepts JPEG, PNG, and PDF documents (up to 20 MB)
+  - Patient selector dropdown ("— New patient —" default or link to an existing patient)
+  - Click or drag-and-drop file upload zone
+  - Submit triggers `POST /reports/upload` (`uploadReport`) to run local OCR
+- **State 2: Verification**
+  - Split-pane layout:
+    - **Left pane**: Live document preview (inline image view or PDF viewer via `<embed>` / page previews)
+    - **Right pane**: Editable form pre-filled with OCR-extracted fields:
+      - Patient name, report date, report type dropdown (`lab_panel`, `discharge_summary`, `referral_letter`, `other`)
+      - Doctor name, facility name
+      - Extracted key-value pairs table with add/remove row controls
+      - Collapsible raw OCR text section
+      - Collapsible patient demographics section (age, sex, DOB, contact, MRN, referring physician)
+  - Submit triggers `POST /reports/confirm` (`confirmReport`) to persist records
+- **State 3: Success**
+  - Confirmation card summarizing saved document and patient details, with a direct link to the patient profile
 
 ## X-Ray Screening Results Display
 - Prediction badge (red for any non-normal finding, green for normal) with label capitalized for display
@@ -48,14 +67,23 @@ Full medical portal UI. Upload chest X-ray images, display screening results (he
 - Loading state shows spinner with indeterminate progress bar
 - Error handling: 413 → size limit, 502 → model server unavailable, 400 → validation message, AbortError → silently ignored (user navigated away)
 
+## Records & Patient Profile Display
+- **Records (`/records`)**:
+  - Displays grid cards for both scan documents and report documents
+  - `document_type === "report"` shows report type badge, extracted date, doctor name, and truncated raw text preview instead of heatmap
+- **Patient Profile (`/patients/:id`)**:
+  - Profile header displays expanded patient demographic fields: age, sex, DOB, contact, MRN, referring physician, medical history
+  - Document history section lists both X-ray scans and medical reports
+  - Clicking a report document opens a modal viewing extracted fields, raw text, and report file preview
+
 ## API Integration
-- `POST /screen` — upload image + patient name (optionally `patient_id` for existing patients), receive screening results (includes `prediction`, `confidence`, `pathology_scores`, `op_threshs`, `heatmap_base64`, `model_used`)
-- `GET /patients`, `GET /patients/stats` — dashboard data
-- `GET /patients/{id}` — patient profile (nested documents + scan results) — used by PatientProfile
-- `GET /patients/{id}/documents` — documents for one patient — used by PatientHistory and Records
-- `GET /documents/{id}` — single document with scan result
-- `GET /image/{id}`, `GET /heatmap/{id}` — file streaming via `imageUrl()` / `heatmapUrl()` helpers
-- API client centralized in `src/api/client.js` (`screenXray`, `fetchPatients`, `fetchPatientStats`, `fetchPatient`, `fetchPatientDocuments`, `fetchDocument`)
+- `uploadReport(file)` — `POST /reports/upload` (120s timeout, accepts image/PDF ≤ 20 MB)
+- `confirmReport(data)` — `POST /reports/confirm` (60s timeout, persists Patient + Document + ReportResult)
+- `reportFileUrl(documentId)` — `GET /reports/{documentId}/file` streaming helper
+- `screenXray(file, patientName, patientId)` — `POST /screen` (120s timeout)
+- `fetchPatients`, `fetchPatientStats`, `fetchPatient`, `fetchPatientDocuments`, `fetchDocument`
+- `imageUrl(docId)`, `heatmapUrl(scanId)`
+- Centralized in `src/api/client.js`
 - All pages display load errors in a red banner when API calls fail (no silent `.catch()`)
 
 ## Rules
