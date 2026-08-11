@@ -1,0 +1,10 @@
+{
+  "patient_name": "Priya Nair",
+  "report_date": "2026-06-18",
+  "doctor_name": "Rajan Verma",
+  "facility_name": null,
+  "report_type": "discharge_summary",
+  "extracted_fields": {
+    "hemoglobin": "12.8 g/dL"
+  }
+}

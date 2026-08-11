@@ -1,0 +1,20 @@
+{
+  "patient_name": "Ramesh Iyer",
+  "report_date": "2026-07-03",
+  "doctor_name": "Anita Desai",
+  "facility_name": "SUNRISE DIAGNOSTICS",
+  "report_type": "lab_panel",
+  "extracted_fields": {
+    "hemoglobin": "16.8 g/dL",
+    "wbc": "7.2 x10^3/uL",
+    "platelet": "3.1 lakhs",
+    "rbc": "5.2 million/uL",
+    "sgpt": "38 U/L",
+    "sgot": "28 U/L",
+    "total_bilirubin": "0.9 mg/dL",
+    "total_cholesterol": "190 mg/dL",
+    "triglycerides": "120 mg/dL",
+    "hdl": "44 mg/dL",
+    "ldl": "122 mg/dL"
+  }
+}

@@ -1,0 +1,24 @@
+SUNRISE DIAGNOSTICS
+Serving since 1990
+Patient Name : Ramesh Iyer
+Age : 41 yrs   Sex : M
+Ref By : Dr. Anita Desai
+Date of Sample Collection : 03/07/2026
+
+CBC
+Test                 Result     Unit      Ref Range
+Hemoglobin           16.8       g/dL      13.0 - 17.0
+Total WBC Count      7.2        x10^3/uL  4.0 - 11.0
+Platelet Count       3.1        lakhs     1.5 - 4.1
+RBC Count            5.2        million/uL 4.5 - 5.5
+
+LFT
+SGPT (ALT)           38         U/L       0 - 40
+SGPT (AST)           28         U/L       0 - 40
+Total Bilirubin      0.9        mg/dL     0.2 - 1.2
+
+LIPID PROFILE
+Total Cholesterol    190        mg/dL     < 200
+Triglycerides        120        mg/dL     < 150
+HDL                  44         mg/dL     > 40
+LDL                  122        mg/dL     < 100

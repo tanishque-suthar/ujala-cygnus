@@ -1,0 +1,9 @@
+DISCHARGE SUMMARY
+Patient : Priya Nair
+Date of Discharge : 18/06/2026
+Date of Admission : 15/06/2026
+Chief complaint: chest pain and shortness of breath for 3 days.
+Admitted with suspected ACS. ECG showed sinus tachycardia. Patient was
+started on aspirin and atorvastatin. Hemoglobin was 12.8 g/dL at admission.
+Discharge instructions: follow up in OPD with Dr. Rajan Verma. Avoid
+strenuous activity for 2 weeks.
