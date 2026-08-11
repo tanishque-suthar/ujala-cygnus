@@ -77,14 +77,19 @@ The model is loaded with `apply_sigmoid=False`, and its `op_threshs` are saved t
 
 | File | Purpose |
 |---|---|
-| `inference.py` | Model loading, preprocessing, Grad-CAM, prediction logic — dispatches on `MODEL_BACKEND` |
+| `inference.py` | Model loading, preprocessing, Grad-CAM / attention rollout, prediction logic — dispatches on `MODEL_BACKEND` |
 | `biomedclip_model.py` | BiomedCLIP+LoRA architecture (`LoRALinear`, `QKVLoRALinear`, `BiomedCLIPLoRA`), label list, threshold loader |
 | `main.py` | FastAPI app, lifespan, endpoints, CORS |
 | `app_config.py` | Pydantic settings (`model_backend`, `checkpoint_path`, `thresholds_path`, `model_weights`) |
 | `requirements.txt` | Python dependencies |
+| `test_crop.py`, `test_xrv.py` | Throwaway exploratory scripts (crop pipeline, torchxrayvision input range) — not part of the test suite |
 
 Note: the inference module is named `inference.py` (not `model.py`) to avoid shadowing torchxrayvision's internal `model` package.
 Note: the config module is named `app_config.py` (not `config.py`) to avoid shadowing torchxrayvision's internal `config` package.
+
+## Rules
+- CORS: allow `localhost:8000` only (the backend) — the frontend must never call this server directly
+- `/predict` runs off the event loop via `run_in_executor` (inference is blocking)
 
 ## Env vars
 
